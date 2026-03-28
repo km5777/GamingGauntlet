@@ -1,5 +1,5 @@
 const API_KEY = "62593b97a74e46aca2f4820ee2548f86";
-let masterPool = []; // One massive bucket of thousands of famous games
+let masterGameLibrary = []; // One massive bucket of thousands of famous games
 let currentVariant = 'random';
 let draftingPool = [];
 
@@ -8,10 +8,10 @@ async function loadGames() {
     document.getElementById('loading-screen').style.display = 'flex';
     document.getElementById('app').style.display = 'none';
 
-    // THE HARD BLOCK: If online and NOT leader, stop immediately.
-    // P2 stays on loading screen until 'init-library' arrives in multiplayer.js
     if (myRoomData.isOnline && !amILeader) {
         document.querySelector('.loading-text').innerText = "WAITING FOR LEADER TO SYNC...";
+        // TELL THE LEADER: "I am here and ready for the library!"
+        socket.emit('request-library-sync', { roomId: myRoomData.roomId });
         return;
     }
 
@@ -33,16 +33,13 @@ async function loadGames() {
         masterGameLibrary.sort(() => Math.random() - 0.5);
         draftingPool = [...masterGameLibrary];
 
-        // Sync everything to the guest immediately
-        if (myRoomData.isOnline && amILeader) {
-            socket.emit('sync-library', {
-                roomId: myRoomData.roomId,
-                library: masterGameLibrary,
-                pool: draftingPool
-            });
+        // If local, start now. If online, we wait for P2 to ask via the socket listener in multiplayer.js
+        if (!myRoomData.isOnline) {
+            finalizeGameStart();
+        } else {
+            document.querySelector('.loading-text').innerText = "WAITING FOR FRIEND TO JOIN...";
         }
 
-        finalizeGameStart();
     } catch (e) {
         console.error(e);
         resetGameToMenu();
@@ -58,12 +55,10 @@ function finalizeGameStart() {
         document.getElementById('draft-phase').style.display = 'none';
         document.getElementById('hl-phase').style.display = 'flex';
 
-        // Only Leader (or local player) picks the starting games
         if (!myRoomData.isOnline || amILeader) {
             hlState.currentStandardGame = masterGameLibrary.pop();
             hlState.nextGame = masterGameLibrary.pop();
 
-            // Tell the friend exactly which two games we start with
             if (myRoomData.isOnline) {
                 socket.emit('hl-start-game', {
                     roomId: myRoomData.roomId,
@@ -74,7 +69,7 @@ function finalizeGameStart() {
             setupHLRound();
         }
     } else {
-        // Keep/Kill Logic
+        // Drafting Mode Logic...
         document.getElementById('draft-phase').style.display = 'block';
         document.getElementById('hl-phase').style.display = 'none';
         if (currentVariant === 'search') {

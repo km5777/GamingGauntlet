@@ -89,28 +89,50 @@ function connectMultiplayer() {
         }
     });
 
+    socket.on('send-library-to-guest', () => {
+        if (amILeader) {
+            socket.emit('sync-library', {
+                roomId: myRoomData.roomId,
+                library: masterGameLibrary,
+                pool: draftingPool
+            });
+        }
+    });
+
+    // 2. Guest receives the library
     socket.on('init-library', (data) => {
         masterGameLibrary = data.library;
         draftingPool = data.pool;
         finalizeGameStart();
     });
 
-    // Higher/Lower Reveal Sync
+    // 3. Everyone receives the start games
+    socket.on('hl-init-games', (data) => {
+        hlState.currentStandardGame = data.std;
+        hlState.nextGame = data.next;
+        setupHLRound();
+    });
+
+    // 4. Update Reveal Sync to handle turn swaps properly
     socket.on('hl-sync-reveal', (data) => {
         hlState.p1Score = data.score1;
         hlState.p2Score = data.score2;
-        document.getElementById('hl-p1-score').innerText = data.score1;
-        document.getElementById('hl-p2-score').innerText = data.score2;
 
-        const yearBadge = document.getElementById('hl-next-year');
-        yearBadge.innerText = data.nextYear;
-        yearBadge.classList.remove('hidden');
+        // Use correct labels
+        const p1ScoreElem = document.getElementById('hl-p1-score');
+        const p2ScoreElem = document.getElementById('hl-p2-score');
+        if (p1ScoreElem) p1ScoreElem.innerText = data.score1;
+        if (p2ScoreElem) p2ScoreElem.innerText = data.score2;
 
-        const nextCard = document.getElementById('hl-next-card');
-        nextCard.classList.add(data.isCorrect ? 'correct' : 'incorrect');
+        const badge = document.getElementById('hl-next-year');
+        if (badge) {
+            badge.innerText = data.nextYear;
+            badge.classList.remove('hidden');
+        }
 
-        // IMPORTANT: The person NOT currently playing the round 
-        // also needs to call proceedHL to move to the next game
+        document.getElementById('hl-next-card').classList.add(data.isCorrect ? 'correct' : 'incorrect');
+
+        // Only the spectator moves to the next round (the player triggers it themselves)
         if (myIdentity !== gameState.turn) {
             setTimeout(() => proceedHL(), 2000);
         }
@@ -134,11 +156,7 @@ function connectMultiplayer() {
         }
     });
 
-    socket.on('hl-init-games', (data) => {
-        hlState.currentStandardGame = data.std;
-        hlState.nextGame = data.next;
-        setupHLRound();
-    });
+
 
     // P2 receives the EXACT next game when P1's turn ends
     socket.on('hl-receive-next', (nextGameObj) => {

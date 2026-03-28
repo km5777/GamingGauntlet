@@ -687,6 +687,48 @@ function addGameFromSearch(game) {
 }
 
 
+function setupHLRound() {
+    // 1. Show the screen
+    document.getElementById('hl-phase').style.display = 'flex';
+    document.getElementById('loading-screen').style.display = 'none';
+
+    // 2. NAME FIX: Ensure we have names before rendering labels
+    const p1Name = getPlayerName('p1');
+    const p2Name = getPlayerName('p2');
+
+    const label1 = document.getElementById('hl-p1-label');
+    const label2 = document.getElementById('hl-p2-label');
+
+    if (label1) label1.innerHTML = `${p1Name}: <span id="hl-p1-score">${hlState.p1Score}</span>`;
+    if (label2) label2.innerHTML = `${p2Name}: <span id="hl-p2-score">${hlState.p2Score}</span>`;
+
+    const activePlayerName = getPlayerName(gameState.turn);
+    document.getElementById('hl-turn-indicator').innerText = `${activePlayerName}'S TURN`;
+
+    // 3. UI Updates
+    document.getElementById('hl-round-num').innerText = hlState.roundCount + 1;
+    document.getElementById('hl-next-card').classList.remove('correct', 'incorrect');
+
+    // Standard Game
+    if (hlState.currentStandardGame) {
+        const stdYear = hlState.currentStandardGame.released.split('-')[0];
+        document.getElementById('hl-standard-year').innerText = stdYear;
+        document.getElementById('hl-standard-name').innerText = hlState.currentStandardGame.name;
+        document.getElementById('hl-standard-img').src = hlState.currentStandardGame.background_image;
+    }
+
+    // Next Game
+    if (hlState.nextGame) {
+        document.getElementById('hl-next-name').innerText = hlState.nextGame.name;
+        document.getElementById('hl-next-img').src = hlState.nextGame.background_image;
+        document.getElementById('hl-next-year').classList.add('hidden');
+    }
+
+    // Control Visibility
+    const isMyTurn = (myRoomData.isOnline) ? (myIdentity === gameState.turn) : true;
+    document.getElementById('hl-controls').style.display = isMyTurn ? 'flex' : 'none';
+}
+
 
 function makeHLGuess(choice) {
     const stdYear = parseInt(hlState.currentStandardGame.released.split('-')[0]);

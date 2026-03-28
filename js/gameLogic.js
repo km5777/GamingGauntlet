@@ -26,28 +26,23 @@ function toggleGameSelection(gameId) {
 }
 
 function initHigherLower() {
-    // 1. Reset Scores
+    // Just reset variables and show loading
     hlState.p1Score = 0;
     hlState.p2Score = 0;
     hlState.roundCount = 0;
     gameState.turn = "p1";
 
-    // 2. Hide Menu, Show App
     document.getElementById('main-menu').style.display = 'none';
     document.getElementById('loading-screen').style.display = 'flex';
 
-    // 3. We use the existing Random Scraper to get popular games
-    currentVariant = 'random';
-    loadGames().then(() => {
-        // Once games are loaded, grab the first two
-        hlState.currentStandardGame = masterGameLibrary.pop();
-        hlState.nextGame = masterGameLibrary.pop();
-        setupHLRound();
-    });
+    // loadGames will handle the actual game start once data arrives
+    loadGames();
 }
 
 function proceedHL() {
     hlState.roundCount++;
+
+    // Check for end of game
     if (hlState.roundCount >= 20) {
         const winner = hlState.p1Score > hlState.p2Score ? getPlayerName('p1') : getPlayerName('p2');
         showModal("GAME OVER", `${winner} WINS!`);
@@ -55,9 +50,11 @@ function proceedHL() {
         return;
     }
 
+    // Swap logical turn
     gameState.turn = (gameState.turn === 'p1') ? 'p2' : 'p1';
 
-    // Only Leader (or local) updates the game state. Guest waits for the socket signal.
+    // AUTHORITY: Only Leader (or local) picks the next game. 
+    // Guest MUST NOT run .pop() or they will get a different game.
     if (!myRoomData.isOnline || amILeader) {
         hlState.currentStandardGame = hlState.nextGame;
         hlState.nextGame = masterGameLibrary.pop();
@@ -69,39 +66,12 @@ function proceedHL() {
             });
         }
         setupHLRound();
+    } else {
+        // Guest just waits. 'hl-receive-next' in multiplayer.js will call setupHLRound.
+        console.log("Guest waiting for next game sync...");
     }
 }
 
-function setupHLRound() {
-    document.getElementById('hl-phase').style.display = 'flex';
-
-    // FIX NAMES: Update the scoreboard labels using the new IDs
-    const p1Name = getPlayerName('p1');
-    const p2Name = getPlayerName('p2');
-    document.getElementById('hl-p1-label').innerHTML = `${p1Name}: <span id="hl-p1-score">${hlState.p1Score}</span>`;
-    document.getElementById('hl-p2-label').innerHTML = `${p2Name}: <span id="hl-p2-score">${hlState.p2Score}</span>`;
-
-    // Set the Turn Header to the actual player name
-    const activePlayerName = getPlayerName(gameState.turn);
-    document.getElementById('hl-turn-indicator').innerText = `${activePlayerName}'S TURN`;
-
-    document.getElementById('hl-round-num').innerText = hlState.roundCount + 1;
-    document.getElementById('hl-next-card').classList.remove('correct', 'incorrect');
-
-    // Standard Game UI
-    const stdYear = hlState.currentStandardGame.released.split('-')[0];
-    document.getElementById('hl-standard-year').innerText = stdYear;
-    document.getElementById('hl-standard-name').innerText = hlState.currentStandardGame.name;
-    document.getElementById('hl-standard-img').src = hlState.currentStandardGame.background_image;
-
-    // Next Game UI
-    document.getElementById('hl-next-name').innerText = hlState.nextGame.name;
-    document.getElementById('hl-next-img').src = hlState.nextGame.background_image;
-    document.getElementById('hl-next-year').classList.add('hidden');
-
-    const isMyTurn = (myRoomData.isOnline) ? (myIdentity === gameState.turn) : true;
-    document.getElementById('hl-controls').style.display = isMyTurn ? 'flex' : 'none';
-}
 
 function handleConfirm() {
     if (myRoomData.isOnline) {

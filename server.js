@@ -69,8 +69,19 @@ io.on('connection', (socket) => {
         }
     });
 
+    // Guest asks the Leader for the game data
+    socket.on('request-library-sync', (data) => {
+        socket.to(data.roomId).emit('send-library-to-guest');
+    });
+
+    // Leader sends the library specifically to the guest who asked
+    socket.on('sync-library', (data) => {
+        io.to(data.roomId).emit('init-library', data);
+    });
+
+    // Sync the Higher/Lower Start
     socket.on('hl-start-game', (data) => {
-        socket.to(data.roomId).emit('hl-init-games', data);
+        io.to(data.roomId).emit('hl-init-games', data);
     });
 
     // Sync the "Next" game when a round ends
@@ -81,7 +92,7 @@ io.on('connection', (socket) => {
     socket.on('start-game-request', (data) => {
         const room = rooms[data.roomId];
         if (room && room.players[0].id === socket.id) {
-            // Tell everyone the game is starting and WHICH mode it is
+            // Broadcast start signal to everyone
             io.to(data.roomId).emit('init-online-game', {
                 variant: data.variant,
                 phase: data.phase
@@ -98,12 +109,6 @@ io.on('connection', (socket) => {
         }
     });
 
-    socket.on('sync-library', (data) => {
-        socket.to(data.roomId).emit('init-library', {
-            library: data.library,
-            pool: data.pool
-        });
-    });
 
     socket.on('player-ready-draft', (data) => {
         const room = rooms[data.roomId];
