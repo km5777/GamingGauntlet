@@ -17,9 +17,9 @@ function connectMultiplayer() {
     if (socket && socket.connected) return;
 
     socket = io(SERVER_URL, {
-        transports: ['websocket', 'polling'],
-        withCredentials: true
-    });
+        transports: ['polling', 'websocket'],
+        upgrade: true
+    })
 
     // When YOU create a room
     socket.on('room-created', (data) => {

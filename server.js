@@ -1,13 +1,24 @@
 const express = require('express');
+const cors = require('cors'); // Import this
 const app = express();
+
+// Use this to allow the header on the base express app
+app.use(cors());
+
 const http = require('http').createServer(app);
+
+// Use this for the Socket.io connection
 const io = require('socket.io')(http, {
     cors: {
-        origin: "*", // Allows all origins
+        origin: "*",
         methods: ["GET", "POST"],
-        allowedHeaders: ["my-custom-header"],
-        credentials: true
+        allowedHeaders: ["*"]
     }
+});
+
+// Add a "Ping" route to check if the server is awake
+app.get('/', (req, res) => {
+    res.send('SERVER IS AWAKE');
 });
 
 let rooms = {};
