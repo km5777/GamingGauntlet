@@ -78,6 +78,9 @@ function connectMultiplayer() {
         currentVariant = data.variant;
         gameState.phase = data.phase; // higher_lower, drafting, blind_ranking
         if (data.limit) draftLimit = data.limit;
+        
+        currentSelections = []; // Guaranteed clean state for draft arrays
+        if (typeof isGuestWaiting !== 'undefined') isGuestWaiting = false;
 
         document.getElementById('main-menu').style.display = 'none';
         document.getElementById('app').style.display = 'block';
@@ -203,13 +206,17 @@ function connectMultiplayer() {
     socket.on('start-duel-phase', (data) => {
         if (!myRoomData.isOnline) return;
         
-        if (data && data.p1Draft) {
-            data.p1Draft.forEach(g => { if (!masterGameLibrary.find(m => Number(m.id) === Number(g.id))) masterGameLibrary.push(g); });
-            gameState.player1.draftedForP2 = data.p1Draft.map(g => Number(g.id));
-        }
-        if (data && data.p2Draft) {
-            data.p2Draft.forEach(g => { if (!masterGameLibrary.find(m => Number(m.id) === Number(g.id))) masterGameLibrary.push(g); });
-            gameState.player2.draftedForP1 = data.p2Draft.map(g => Number(g.id));
+        try {
+            if (data && data.p1Draft) {
+                data.p1Draft.forEach(g => { if (!masterGameLibrary.find(m => Number(m.id) === Number(g.id))) masterGameLibrary.push(g); });
+                gameState.player1.draftedForP2 = data.p1Draft.map(g => Number(g.id));
+            }
+            if (data && data.p2Draft) {
+                data.p2Draft.forEach(g => { if (!masterGameLibrary.find(m => Number(m.id) === Number(g.id))) masterGameLibrary.push(g); });
+                gameState.player2.draftedForP1 = data.p2Draft.map(g => Number(g.id));
+            }
+        } catch (e) {
+            console.error("Payload synchronization error bypassed: ", e);
         }
 
         if (gameState.phase === 'blind_ranking') {

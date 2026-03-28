@@ -686,7 +686,7 @@ if (searchInput) {
                 const div = document.createElement('div');
                 div.className = 'search-result-item';
                 div.innerHTML = `
-                    <img src="${game.background_image || ''}" onerror="this.src='https://via.placeholder.com/50x50?text=No+Img'">
+                    <img src="${game.background_image || ''}" onerror="this.onerror=null; this.style.backgroundColor='#1a1c24'; this.src='';">
                     <div class="search-result-info">
                         <h4>${game.name}</h4>
                         <p>${game.released ? game.released.split('-')[0] : 'N/A'}</p>
