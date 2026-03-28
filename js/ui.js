@@ -413,3 +413,21 @@ function startEndGameCountdown(seconds) {
         }
     }, 1000);
 }
+
+const leaveGameBtn = document.getElementById('leave-game-btn');
+if (leaveGameBtn) {
+    leaveGameBtn.onclick = () => {
+        const confirmLeave = confirm("Are you sure you want to surrender and leave the match?");
+        if (confirmLeave) {
+            // If playing online, tell the server we are leaving the room
+            if (myRoomData && myRoomData.isOnline && typeof socket !== 'undefined' && socket) {
+                socket.emit('leave-room', myRoomData.roomId);
+                if (typeof resetLocalRoomState === 'function') resetLocalRoomState();
+            }
+
+            // Immediately kick ourselves back to the menu
+            if (typeof countdown !== 'undefined') clearInterval(countdown);
+            resetGameToMenu();
+        }
+    };
+}

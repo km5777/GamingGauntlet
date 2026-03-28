@@ -48,6 +48,19 @@ function connectMultiplayer() {
         }
 
         renderLobby(data.roomId, data.players);
+
+        // --- NEW: HANDLE MID-GAME ABANDONMENT ---
+        const appDiv = document.getElementById('app');
+        if (appDiv && appDiv.style.display === 'block') {
+            // If we are actively in a game, and player count drops below 2
+            if (data.players.length < 2) {
+                // Stop timers
+                if (typeof countdown !== 'undefined') clearInterval(countdown);
+
+                showModal("MATCH ABORTED", "The opponent has left the match.");
+                resetGameToMenu(); // Kick the remaining player back to menu
+            }
+        }
     });
 
     // --- NEW: Handled getting Kicked ---
