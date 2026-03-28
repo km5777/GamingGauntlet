@@ -203,8 +203,14 @@ function connectMultiplayer() {
     socket.on('start-duel-phase', (data) => {
         if (!myRoomData.isOnline) return;
         
-        if (data && data.p1Draft) gameState.player1.draftedForP2 = data.p1Draft;
-        if (data && data.p2Draft) gameState.player2.draftedForP1 = data.p2Draft;
+        if (data && data.p1Draft) {
+            data.p1Draft.forEach(g => { if (!masterGameLibrary.find(m => m.id === g.id)) masterGameLibrary.push(g); });
+            gameState.player1.draftedForP2 = data.p1Draft.map(g => g.id);
+        }
+        if (data && data.p2Draft) {
+            data.p2Draft.forEach(g => { if (!masterGameLibrary.find(m => m.id === g.id)) masterGameLibrary.push(g); });
+            gameState.player2.draftedForP1 = data.p2Draft.map(g => g.id);
+        }
 
         if (gameState.phase === 'blind_ranking') {
             startBlindRankingPhase();

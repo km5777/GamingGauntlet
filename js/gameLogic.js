@@ -91,7 +91,7 @@ function handleConfirm() {
         document.getElementById('confirm-btn').innerText = "WAITING...";
         socket.emit('player-ready-draft', { 
             roomId: myRoomData.roomId,
-            draftList: [...currentSelections] 
+            draftList: currentSelections.map(id => masterGameLibrary.find(g => g.id === id)) 
         });
     } else {
         // Local Mode Logic
