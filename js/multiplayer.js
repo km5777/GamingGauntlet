@@ -204,12 +204,12 @@ function connectMultiplayer() {
         if (!myRoomData.isOnline) return;
         
         if (data && data.p1Draft) {
-            data.p1Draft.forEach(g => { if (!masterGameLibrary.find(m => m.id === g.id)) masterGameLibrary.push(g); });
-            gameState.player1.draftedForP2 = data.p1Draft.map(g => g.id);
+            data.p1Draft.forEach(g => { if (!masterGameLibrary.find(m => Number(m.id) === Number(g.id))) masterGameLibrary.push(g); });
+            gameState.player1.draftedForP2 = data.p1Draft.map(g => Number(g.id));
         }
         if (data && data.p2Draft) {
-            data.p2Draft.forEach(g => { if (!masterGameLibrary.find(m => m.id === g.id)) masterGameLibrary.push(g); });
-            gameState.player2.draftedForP1 = data.p2Draft.map(g => g.id);
+            data.p2Draft.forEach(g => { if (!masterGameLibrary.find(m => Number(m.id) === Number(g.id))) masterGameLibrary.push(g); });
+            gameState.player2.draftedForP1 = data.p2Draft.map(g => Number(g.id));
         }
 
         if (gameState.phase === 'blind_ranking') {
@@ -222,7 +222,7 @@ function connectMultiplayer() {
 
     socket.on('br-opponent-placed', (data) => {
         if (!myRoomData.isOnline || typeof updateBRSlot !== 'function') return;
-        const game = masterGameLibrary.find(g => g.id === data.gameId);
+        const game = masterGameLibrary.find(g => Number(g.id) === Number(data.gameId));
         if (game) {
             let ranking = data.role === 'p1' ? brState.p1Ranking : brState.p2Ranking;
             ranking[data.slotIndex] = game;

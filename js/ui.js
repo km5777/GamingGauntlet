@@ -922,6 +922,7 @@ function drawNextBRGame(role) {
             }
         }
         
+        renderBRActiveGame(); // Forces the active card to safely blank out to 'WAITING FOR OPPONENT'
         checkBRFinished();
         return;
     }

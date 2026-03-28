@@ -92,8 +92,8 @@ function handleConfirm() {
         socket.emit('player-ready-draft', { 
             roomId: myRoomData.roomId,
             draftList: currentSelections.map(id => {
-                let g = masterGameLibrary.find(x => x.id === id);
-                return g ? { id: g.id, name: g.name, background_image: g.background_image } : null;
+                let g = masterGameLibrary.find(x => Number(x.id) === Number(id));
+                return g ? { id: Number(g.id), name: g.name, background_image: g.background_image } : null;
             }).filter(g => g !== null)
         });
     } else {
