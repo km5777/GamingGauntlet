@@ -89,8 +89,10 @@ function handleConfirm() {
 
         document.getElementById('confirm-btn').disabled = true;
         document.getElementById('confirm-btn').innerText = "WAITING...";
-
-        socket.emit('player-ready-draft', { roomId: myRoomData.roomId });
+        socket.emit('player-ready-draft', { 
+            roomId: myRoomData.roomId,
+            draftList: [...currentSelections] 
+        });
     } else {
         // Local Mode Logic
         if (gameState.turn === 'p1') {

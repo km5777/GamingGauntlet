@@ -200,8 +200,12 @@ function connectMultiplayer() {
 
 
 
-    socket.on('start-duel-phase', () => {
+    socket.on('start-duel-phase', (data) => {
         if (!myRoomData.isOnline) return;
+        
+        if (data && data.p1Draft) gameState.player1.draftedForP2 = data.p1Draft;
+        if (data && data.p2Draft) gameState.player2.draftedForP1 = data.p2Draft;
+
         if (gameState.phase === 'blind_ranking') {
             startBlindRankingPhase();
         } else {

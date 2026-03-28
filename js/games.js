@@ -72,6 +72,9 @@ function finalizeGameStart() {
     document.getElementById('loading-screen').style.display = 'none';
     document.getElementById('app').style.display = 'block';
 
+    const counter = document.getElementById('counter');
+    if (counter) counter.innerText = `SELECTED: 0 / ${draftLimit}`;
+
     if (gameState.phase === "higher_lower") {
         document.getElementById('draft-phase').style.display = 'none';
         document.getElementById('hl-phase').style.display = 'flex';

@@ -116,9 +116,18 @@ io.on('connection', (socket) => {
         const room = rooms[data.roomId];
         if (room) {
             const p = room.players.find(pl => pl.id === socket.id);
-            if (p) p.ready = true;
+            if (p) {
+                p.ready = true;
+                p.draftList = data.draftList || []; 
+            }
             io.to(data.roomId).emit('update-draft-status', room.players);
-            if (room.players.every(pl => pl.ready)) io.to(data.roomId).emit('start-duel-phase');
+            if (room.players.every(pl => pl.ready)) {
+                // Send both draft lists to everyone
+                io.to(data.roomId).emit('start-duel-phase', {
+                    p1Draft: room.players.find(pl => pl.role === 'p1').draftList || [],
+                    p2Draft: room.players.find(pl => pl.role === 'p2').draftList || []
+                });
+            }
         }
     });
 
