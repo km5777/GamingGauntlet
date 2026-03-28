@@ -119,7 +119,7 @@ io.on('connection', (socket) => {
     // Gameplay syncing events
     socket.on('reveal-game', (data) => io.to(data.roomId).emit('opponent-revealed', data.game));
     socket.on('decision-made', (data) => io.to(data.roomId).emit('opponent-decided', data));
-    ocket.on('start-game-request', (data) => {
+    socket.on('start-game-request', (data) => {
         const room = rooms[data.roomId];
         if (room && room.players[0].id === socket.id) {
             // Broadcast variant to everyone
