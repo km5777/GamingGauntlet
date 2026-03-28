@@ -84,12 +84,19 @@ function startPlayer2Draft() {
     gameState.turn = "p2";
     currentSelections = [];
 
+    // THE FIX: Clear the library HTML so P1's cards vanish
+    const lib = document.getElementById('game-library');
+    if (lib) lib.innerHTML = '';
+
     updateDraftHeader();
     document.getElementById('counter').innerText = "SELECTED: 0 / 10";
     document.getElementById('confirm-btn').disabled = true;
 
-    // Grab a FRESH 40 for Player 2
-    refreshLibraryUI();
+    // Grab a FRESH 40 for Player 2 (if in Random mode)
+    if (currentVariant === 'random') {
+        refreshLibraryUI();
+    }
+
     window.scrollTo(0, 0);
     showModal("TURN SWAP", "Player 1 Draft Complete! Pass the device to Player 2.");
 }
@@ -365,6 +372,21 @@ document.getElementById('open-online-btn').onclick = () => {
     document.getElementById('modal-online-rooms').style.display = 'flex';
 };
 document.getElementById('mode-keep-kill').onclick = () => {
+    closeModals();
+    document.getElementById('modal-variant-selection').style.display = 'flex';
+};
+
+document.getElementById('variant-random').onclick = () => {
+    currentVariant = 'random';
+    closeModals();
+    document.getElementById('modal-game-selection').style.display = 'flex';
+    document.getElementById('sub-mode-selection').style.display = 'block';
+};
+
+document.getElementById('variant-search').onclick = () => {
+    currentVariant = 'search';
+    closeModals();
+    document.getElementById('modal-game-selection').style.display = 'flex';
     document.getElementById('sub-mode-selection').style.display = 'block';
 };
 
@@ -378,13 +400,16 @@ document.getElementById('play-online-btn').onclick = () => {
     if (!myRoomData.roomId) return showModal("ERROR", "Make or Join a room first!");
     if (myRoomData.players.length < 2) return showModal("ERROR", "Waiting for Player 2...");
 
-    // NEW: Leader Check
     if (!amILeader) {
         showModal("ACCESS DENIED", "Only the Room Leader (👑) can start the game!");
         return;
     }
 
-    socket.emit('start-game-request', myRoomData.roomId);
+    // Send the variant selection to the server
+    socket.emit('start-game-request', {
+        roomId: myRoomData.roomId,
+        variant: currentVariant
+    });
 };
 
 function closeModals() {
@@ -529,4 +554,96 @@ function updateRerollButtonUI() {
     const currentPlayer = (gameState.turn === 'p1') ? gameState.player1 : gameState.player2;
     rerollBtn.innerText = `REFRESH LIST (${currentPlayer.rerolls})`;
     rerollBtn.disabled = (currentPlayer.rerolls <= 0);
+}
+
+const searchInput = document.getElementById('game-search-input');
+const resultsBox = document.getElementById('search-results-dropdown');
+
+let searchTimeout = null;
+
+if (searchInput) {
+    searchInput.addEventListener('input', (e) => {
+        const query = e.target.value;
+
+        // Clear the previous timer every time the user types
+        clearTimeout(searchTimeout);
+
+        if (query.length < 3) {
+            resultsBox.innerHTML = '';
+            resultsBox.style.display = 'none';
+            return;
+        }
+
+        // Show a "Searching..." hint immediately for better UX
+        resultsBox.style.display = 'block';
+        resultsBox.innerHTML = '<div style="padding:15px; color:#8a8d98; font-size:12px;">SEARCHING...</div>';
+
+        // Wait 250ms after the user stops typing to call the API
+        searchTimeout = setTimeout(async () => {
+            const results = await searchRAWG(query);
+
+            // If the user cleared the input while we were waiting for API
+            if (searchInput.value.length < 3) {
+                resultsBox.style.display = 'none';
+                return;
+            }
+
+            resultsBox.innerHTML = '';
+
+            if (results.length === 0) {
+                resultsBox.innerHTML = '<div style="padding:15px; color:#ff5e62; font-size:12px;">NO GAMES FOUND</div>';
+                return;
+            }
+
+            results.forEach(game => {
+                const div = document.createElement('div');
+                div.className = 'search-result-item';
+                div.innerHTML = `
+                    <img src="${game.background_image || ''}" onerror="this.src='https://via.placeholder.com/50x50?text=No+Img'">
+                    <div class="search-result-info">
+                        <h4>${game.name}</h4>
+                        <p>${game.released ? game.released.split('-')[0] : 'N/A'}</p>
+                    </div>
+                `;
+                div.onclick = () => {
+                    addGameFromSearch(game);
+                    resultsBox.style.display = 'none';
+                    searchInput.value = '';
+                };
+                resultsBox.appendChild(div);
+            });
+        }, 250);
+    });
+
+    // Close dropdown if user clicks anywhere else
+    document.addEventListener('click', (e) => {
+        if (e.target !== searchInput && e.target !== resultsBox) {
+            resultsBox.style.display = 'none';
+        }
+    });
+}
+
+function addGameFromSearch(game) {
+    if (!masterGameLibrary.find(g => g.id === game.id)) masterGameLibrary.push(game);
+    if (currentSelections.includes(game.id)) return showModal("ALREADY PICKED", "Game already in list.");
+    if (currentSelections.length >= 10) return showModal("LIMIT REACHED", "You already have 10 games!");
+
+    currentSelections.push(game.id);
+    const card = document.createElement('div');
+    card.className = 'game-card selected';
+    card.innerHTML = `<img src="${game.background_image}"><h3>${game.name}</h3>`;
+
+    card.onclick = () => {
+        const idx = currentSelections.indexOf(game.id);
+        if (idx > -1) {
+            currentSelections.splice(idx, 1);
+            card.remove();
+            document.getElementById('counter').innerText = `SELECTED: ${currentSelections.length} / 10`;
+            document.getElementById('confirm-btn').disabled = (currentSelections.length !== 10);
+        }
+    };
+
+    document.getElementById('game-library').appendChild(card);
+    document.getElementById('counter').innerText = `SELECTED: ${currentSelections.length} / 10`;
+    document.getElementById('confirm-btn').disabled = (currentSelections.length !== 10);
 }

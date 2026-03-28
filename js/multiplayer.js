@@ -69,16 +69,16 @@ function connectMultiplayer() {
         showModal("REMOVED", "You were kicked from the lobby by the Room Leader.");
     });
 
-    // (Keep your existing socket.on('init-online-game'), 'update-draft-status', etc... right below here)
-    socket.on('init-online-game', () => {
+    socket.on('init-online-game', (data) => {
         closeModals();
+        currentVariant = data.variant; // Sync the variant from the room leader
+
         document.getElementById('main-menu').style.display = 'none';
         document.getElementById('app').style.display = 'block';
         document.getElementById('leave-game-btn').style.display = 'block';
 
         loadGames();
 
-        // Refresh the header again after a short delay to ensure names are loaded
         setTimeout(() => {
             updateDraftHeader();
         }, 1000);

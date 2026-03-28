@@ -51,6 +51,15 @@ io.on('connection', (socket) => {
         }
     });
 
+    socket.on('start-game-request', (data) => {
+        // data contains { roomId, variant }
+        const room = rooms[data.roomId];
+        if (room && room.players[0].id === socket.id) {
+            // Tell everyone in the room to start the game with the chosen variant
+            io.to(data.roomId).emit('init-online-game', { variant: data.variant });
+        }
+    });
+
     // --- NEW: KICK & LEAVE LOGIC ---
     socket.on('leave-room', (roomId) => {
         socket.leave(roomId);
@@ -92,9 +101,12 @@ io.on('connection', (socket) => {
     // Gameplay syncing events
     socket.on('reveal-game', (data) => io.to(data.roomId).emit('opponent-revealed', data.game));
     socket.on('decision-made', (data) => io.to(data.roomId).emit('opponent-decided', data));
-    socket.on('start-game-request', (roomId) => {
-        const room = rooms[roomId];
-        if (room && room.players[0].id === socket.id) io.to(roomId).emit('init-online-game');
+    ocket.on('start-game-request', (data) => {
+        const room = rooms[data.roomId];
+        if (room && room.players[0].id === socket.id) {
+            // Broadcast variant to everyone
+            io.to(data.roomId).emit('init-online-game', { variant: data.variant });
+        }
     });
     socket.on('player-ready-draft', (data) => {
         const room = rooms[data.roomId];
