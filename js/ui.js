@@ -327,8 +327,8 @@ function showModal(title, message) {
 function resetGameToMenu() {
     gameState.phase = "drafting";
     gameState.turn = "p1";
-    gameState.player1 = { draftedForP2: [], keeps: [], kills: [] };
-    gameState.player2 = { draftedForP1: [], keeps: [], kills: [] };
+    gameState.player1 = { draftedForP2: [], keeps: [], kills: [], rerolls: 2 };
+    gameState.player2 = { draftedForP1: [], keeps: [], kills: [], rerolls: 2 };
     currentSelections = [];
 
     // ADDED NULL CHECKS FOR ALL UI UPDATES

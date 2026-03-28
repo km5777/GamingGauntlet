@@ -190,10 +190,8 @@ function connectMultiplayer() {
         if (myIdentity === 'p1' && p1.ready && !p2.ready) {
             document.getElementById('turn-indicator').innerText = "WAITING FOR FRIEND...";
         }
-        else if (myIdentity === 'p2' && p1.ready && !p2.ready) {
-            // This is the trigger that fixes the Player 2 desync!
-            // If P1 is ready and P2 hasn't started yet, force P2 to start.
-            startPlayer2Draft();
+        else if (myIdentity === 'p2' && p2.ready && !p1.ready) {
+            document.getElementById('turn-indicator').innerText = "WAITING FOR FRIEND...";
         }
     });
 
