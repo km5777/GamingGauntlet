@@ -543,7 +543,7 @@ window.addEventListener('DOMContentLoaded', () => {
 const rerollBtn = document.getElementById('reroll-btn');
 if (rerollBtn) {
     rerollBtn.onclick = () => {
-        const currentPlayer = (gameState.turn === 'p1') ? gameState.player1 : gameState.player2;
+        const currentPlayer = (!myRoomData.isOnline) ? ((gameState.turn === 'p1') ? gameState.player1 : gameState.player2) : ((myIdentity === 'p1') ? gameState.player1 : gameState.player2);
 
         if (currentPlayer.rerolls > 0) {
             currentPlayer.rerolls--;
@@ -576,20 +576,21 @@ function updateDraftHeader() {
     if (!myRoomData.isOnline) {
         indicator.innerText = (gameState.turn === 'p1') ? "PLAYER 1: DRAFT 10 GAMES" : "PLAYER 2: DRAFT 10 GAMES";
     } else {
-        // Use real names
-        const targetRole = (gameState.turn === 'p1') ? 'p2' : 'p1';
+        // Online: Each player is drafting simultaneously for the OTHER player
+        const targetRole = (myIdentity === 'p1') ? 'p2' : 'p1';
         const targetName = getPlayerName(targetRole);
         indicator.innerText = `DRAFTING FOR ${targetName}`;
     }
 
-    const currentPlayer = (gameState.turn === 'p1') ? gameState.player1 : gameState.player2;
+    // In online mode, we are technically always using our own rerolls regardless of the 'global' turn
+    const currentPlayer = (!myRoomData.isOnline) ? ((gameState.turn === 'p1') ? gameState.player1 : gameState.player2) : ((myIdentity === 'p1') ? gameState.player1 : gameState.player2);
     rrBtn.innerText = `REFRESH LIST (${currentPlayer.rerolls})`;
     rrBtn.disabled = (currentPlayer.rerolls <= 0);
 }
 
 // Update this in startPlayer2Draft and resetGameToMenu to reset the button text
 function updateRerollButtonUI() {
-    const currentPlayer = (gameState.turn === 'p1') ? gameState.player1 : gameState.player2;
+    const currentPlayer = (!myRoomData.isOnline) ? ((gameState.turn === 'p1') ? gameState.player1 : gameState.player2) : ((myIdentity === 'p1') ? gameState.player1 : gameState.player2);
     rerollBtn.innerText = `REFRESH LIST (${currentPlayer.rerolls})`;
     rerollBtn.disabled = (currentPlayer.rerolls <= 0);
 }

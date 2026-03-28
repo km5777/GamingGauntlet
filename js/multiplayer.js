@@ -111,6 +111,8 @@ function connectMultiplayer() {
     socket.on('init-library', (data) => {
         masterGameLibrary = data.library;
         draftingPool = data.pool;
+        // Each client shuffles their own local copy so they get different games!
+        draftingPool.sort(() => Math.random() - 0.5);
         finalizeGameStart();
     });
 
