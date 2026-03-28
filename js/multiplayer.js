@@ -11,7 +11,7 @@ let myRoomData = {
     players: []
 };
 
-const SERVER_URL = "https://your-app-name.onrender.com";
+const SERVER_URL = "https://gaminggauntlet.onrender.com";
 
 function connectMultiplayer() {
     if (socket && socket.connected) return;
