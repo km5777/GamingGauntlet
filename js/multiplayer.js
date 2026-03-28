@@ -16,7 +16,10 @@ const SERVER_URL = "https://gaminggauntlet.onrender.com";
 function connectMultiplayer() {
     if (socket && socket.connected) return;
 
-    socket = io(SERVER_URL);
+    socket = io(SERVER_URL, {
+        transports: ['websocket', 'polling'],
+        withCredentials: true
+    });
 
     // When YOU create a room
     socket.on('room-created', (data) => {
