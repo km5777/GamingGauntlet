@@ -33,9 +33,10 @@
         <div class="menu-card">
             <h1 class="logo">GAMING<br><span class="accent-text">GAUNTLET</span></h1>
 
-            <div class="menu-actions-grid">
+            <!-- NEW SLEEK VERTICAL MENU STACK -->
+            <div class="menu-actions-stack">
                 <button id="open-games-btn" class="cyber-btn">GAMES</button>
-                <button id="open-online-btn" class="cyber-btn secondary">ROOMS</button>
+                <button id="open-online-btn" class="cyber-btn secondary">CREATE LOBBY</button>
             </div>
 
             <div id="room-status-bar" style="display:none;">
@@ -74,7 +75,8 @@
             <div id="room-entry-area">
                 <input type="text" id="player-name-input" placeholder="ENTER YOUR NAME">
                 <div class="room-actions">
-                    <button id="create-room-btn" class="glow-btn">CREATE ROOM</button>
+                    <button id="create-room-btn" class="cyber-btn">CREATE ROOM</button>
+                    <div class="join-divider"><span>OR</span></div>
                     <div class="join-box">
                         <input type="text" id="join-room-input" placeholder="ROOM KEY">
                         <button id="join-room-btn" class="glow-btn pink">JOIN</button>
@@ -83,19 +85,26 @@
             </div>
 
             <!-- SECTION 2: LOBBY OVERVIEW (Shown after joining) -->
-            <div id="room-lobby-area" style="display:none;">
+            <div id="room-lobby-area" style="display:none; width: 100%;">
                 <div class="room-info-header">
-                    <p>ROOM KEY: <span id="lobby-key-display" style="color:var(--accent); font-weight:bold;">---</span>
-                    </p>
+                    <p>ROOM KEY: <span id="lobby-key-display"
+                            style="color:var(--accent); font-weight:bold; font-size: 24px;">---</span></p>
                 </div>
-                <div id="player-list-container">
-                    <p>WAITING FOR PLAYERS...</p>
+
+                <div id="player-list-container" class="player-list-box">
+                    <p style="color: #8a8d98; font-size: 14px; margin-bottom: 10px;">PLAYERS IN ROOM</p>
                     <ul id="player-names-list"></ul>
                 </div>
-                <p id="lobby-status-text">Waiting for opponent...</p>
+
+                <p id="lobby-status-text" class="status-pulse">Waiting for opponent...</p>
+
+                <!-- NEW LEAVE BUTTON -->
+                <div class="lobby-footer-actions">
+                    <button id="leave-room-btn" class="glow-btn cancel-btn">LEAVE ROOM</button>
+                </div>
             </div>
 
-            <button onclick="closeModals()" class="close-x">BACK</button>
+            <button onclick="closeModals()" class="close-x">CLOSE</button>
         </div>
     </div>
 
