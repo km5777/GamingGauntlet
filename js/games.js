@@ -4,25 +4,44 @@ let currentVariant = 'random';
 let draftingPool = [];
 
 async function loadGames() {
+    // 1. Reset standard UI and show loading
     document.getElementById('main-menu').style.display = 'none';
     document.getElementById('loading-screen').style.display = 'flex';
     document.getElementById('app').style.display = 'none';
 
-    if (currentVariant === 'search') {
+    // Reset basic game states
+    gameState.turn = "p1";
+    gameState.player1.rerolls = 2;
+    gameState.player2.rerolls = 2;
+    hlState.roundCount = 0;
+    hlState.p1Score = 0;
+    hlState.p2Score = 0;
+
+    // 2. THE FIX: CHECK FOR SEARCH MODE BEFORE FETCHING
+    if (currentVariant === 'search' && gameState.phase === 'drafting') {
         document.getElementById('loading-screen').style.display = 'none';
         document.getElementById('app').style.display = 'block';
+        document.getElementById('draft-phase').style.display = 'block';
+        document.getElementById('hl-phase').style.display = 'none';
+        document.getElementById('duel-phase').style.display = 'none';
+
+        // Setup Search UI
         document.getElementById('search-container').style.display = 'block';
         document.getElementById('reroll-btn').style.display = 'none';
-        document.getElementById('game-library').innerHTML = '';
-        masterGameLibrary = [];
+        document.getElementById('game-library').innerHTML = ''; // Clear old cards
+        document.getElementById('leave-game-btn').style.display = 'block';
+
+        masterGameLibrary = []; // Clear for new lookups
         updateDraftHeader();
-        return;
+        return; // STOP HERE - Do not fetch random games
     }
 
-    document.getElementById('search-container').style.display = 'none';
-    document.getElementById('reroll-btn').style.display = 'block';
-
+    // 3. RANDOM / HIGHER-LOWER FETCH LOGIC
     try {
+        // Ensure search container is hidden for random modes
+        document.getElementById('search-container').style.display = 'none';
+        document.getElementById('reroll-btn').style.display = 'block';
+
         const pages = Array.from({ length: 12 }, () => Math.floor(Math.random() * 25) + 1);
         const requests = pages.map(page =>
             fetch(`https://api.rawg.io/api/games?key=${API_KEY}&page_size=40&page=${page}&ordering=-added&dates=1980-01-01,2026-12-31`)
@@ -41,19 +60,30 @@ async function loadGames() {
         masterGameLibrary.sort(() => Math.random() - 0.5);
         draftingPool = [...masterGameLibrary];
 
-        gameState.turn = "p1";
-        gameState.player1.rerolls = 2;
-        gameState.player2.rerolls = 2;
-
         document.getElementById('loading-screen').style.display = 'none';
         document.getElementById('app').style.display = 'block';
         document.getElementById('leave-game-btn').style.display = 'block';
 
-        refreshLibraryUI();
-        updateDraftHeader();
+        if (gameState.phase === "higher_lower") {
+            document.getElementById('draft-phase').style.display = 'none';
+            document.getElementById('hl-phase').style.display = 'flex';
+            document.getElementById('duel-phase').style.display = 'none';
+
+            hlState.currentStandardGame = masterGameLibrary.pop();
+            hlState.nextGame = masterGameLibrary.pop();
+            setupHLRound();
+        } else {
+            document.getElementById('draft-phase').style.display = 'block';
+            document.getElementById('hl-phase').style.display = 'none';
+            document.getElementById('duel-phase').style.display = 'none';
+            refreshLibraryUI();
+            updateDraftHeader();
+        }
+
     } catch (e) {
         console.error(e);
-        showModal("CONNECTION ERROR", "RAWG is slow. Try again!");
+        showModal("ERROR", "API Failure.");
+        resetGameToMenu();
     }
 }
 
@@ -72,16 +102,14 @@ async function searchRAWG(query) {
 }
 
 function refreshLibraryUI() {
-    if (masterPool.length < 40) {
-        showModal("POOL EMPTY", "No more games left in the arena!");
-        return;
+    // THE FIX: If the pool gets low, refill it from the master library
+    if (draftingPool.length < 40) {
+        console.log("Refilling drafting pool from master library...");
+        draftingPool = [...masterGameLibrary].sort(() => Math.random() - 0.5);
     }
 
-    // 1. Grab 40 games from the top of the master pool
-    const displayBatch = masterPool.splice(0, 40);
-
-    // 2. These 40 are now REMOVED from the masterPool. 
-    // Neither player will ever see them again in this match.
+    // Grab 40 from the drafting pool
+    const displayBatch = draftingPool.splice(0, 40);
     renderGameLibrary(displayBatch);
 }
 

@@ -57,7 +57,13 @@
                         will not.</p>
                 </div>
             </div>
-
+            <div class="mode-card" id="mode-higher-lower" style="margin-top:15px;">
+                <div class="mode-icon">📅</div>
+                <div class="mode-info">
+                    <h3>HIGHER / LOWER</h3>
+                    <p>Guess if the next game was released BEFORE or AFTER the current one.</p>
+                </div>
+            </div>
             <div id="sub-mode-selection" style="display:none; margin-top:20px;">
                 <button id="play-local-btn" class="glow-btn">PLAY LOCAL</button>
                 <button id="play-online-btn" class="glow-btn pink">PLAY ONLINE</button>
@@ -191,6 +197,41 @@
                 </div>
             </div>
         </div>
+
+        <div id="hl-phase" class="full-page" style="display: none;">
+            <div class="ui-header">
+                <h2 id="hl-turn-indicator" class="neon-text">PLAYER 1's TURN</h2>
+                <div class="hl-scoreboard">
+                    <div class="hl-score-box p1-score">P1: <span id="hl-p1-score">0</span></div>
+                    <div class="hl-round-badge">ROUND <span id="hl-round-num">1</span> / 20</div>
+                    <div class="hl-score-box p2-score">P2: <span id="hl-p2-score">0</span></div>
+                </div>
+            </div>
+
+            <div class="hl-container">
+                <!-- Current Standard Game (Known Year) -->
+                <div class="hl-card" id="hl-standard-card">
+                    <div class="hl-year-badge" id="hl-standard-year">2009</div>
+                    <img src="" id="hl-standard-img">
+                    <h3 id="hl-standard-name">Game Name</h3>
+                </div>
+
+                <div class="hl-vs-circle">VS</div>
+
+                <!-- Next Game (Hidden Year) -->
+                <div class="hl-card" id="hl-next-card">
+                    <div class="hl-year-badge hidden" id="hl-next-year">????</div>
+                    <img src="" id="hl-next-img">
+                    <h3 id="hl-next-name">Next Game</h3>
+
+                    <div id="hl-controls" class="hl-btn-stack">
+                        <button id="hl-before-btn" class="hl-btn before">BEFORE</button>
+                        <button id="hl-after-btn" class="hl-btn after">AFTER</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
     </div>
 
     <div id="custom-modal" class="modal-overlay" style="display: none;">

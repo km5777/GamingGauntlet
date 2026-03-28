@@ -357,6 +357,14 @@ function resetGameToMenu() {
     if (draft) draft.style.display = 'block';
     if (menu) menu.style.display = 'flex';
     if (leaveBtn) leaveBtn.style.display = 'none'; // Hide leave button on menu
+
+    const hlPhase = document.getElementById('hl-phase');
+    if (hlPhase) hlPhase.style.display = 'none';
+
+    // Reset Higher Lower scores
+    hlState.p1Score = 0;
+    hlState.p2Score = 0;
+    hlState.roundCount = 0;
 }
 
 document.getElementById('confirm-btn').onclick = handleConfirm;
@@ -372,9 +380,16 @@ document.getElementById('open-online-btn').onclick = () => {
     document.getElementById('modal-online-rooms').style.display = 'flex';
 };
 document.getElementById('mode-keep-kill').onclick = () => {
+    gameState.phase = "drafting";
+    // UI Indicator
+    document.getElementById('mode-keep-kill').classList.add('active-mode');
+    document.getElementById('mode-higher-lower').classList.remove('active-mode');
+
     closeModals();
     document.getElementById('modal-variant-selection').style.display = 'flex';
 };
+
+
 
 document.getElementById('variant-random').onclick = () => {
     currentVariant = 'random';
@@ -384,7 +399,19 @@ document.getElementById('variant-random').onclick = () => {
 };
 
 document.getElementById('variant-search').onclick = () => {
-    currentVariant = 'search';
+    currentVariant = 'search'; // Must be lowercase 'search'
+    closeModals();
+    document.getElementById('modal-game-selection').style.display = 'flex';
+    document.getElementById('sub-mode-selection').style.display = 'block';
+};
+
+document.getElementById('mode-higher-lower').onclick = () => {
+    gameState.phase = "higher_lower";
+    currentVariant = 'random';
+    // UI Indicator
+    document.getElementById('mode-higher-lower').classList.add('active-mode');
+    document.getElementById('mode-keep-kill').classList.remove('active-mode');
+
     closeModals();
     document.getElementById('modal-game-selection').style.display = 'flex';
     document.getElementById('sub-mode-selection').style.display = 'block';
@@ -393,23 +420,27 @@ document.getElementById('variant-search').onclick = () => {
 document.getElementById('play-local-btn').onclick = () => {
     myRoomData.isOnline = false;
     closeModals();
-    loadGames(); // Starts existing local game
+    loadGames(); // loadGames now handles the branching logic
 };
 
+document.addEventListener('DOMContentLoaded', () => {
+    const beforeBtn = document.getElementById('hl-before-btn');
+    const afterBtn = document.getElementById('hl-after-btn');
+    if (beforeBtn) beforeBtn.onclick = () => makeHLGuess('before');
+    if (afterBtn) afterBtn.onclick = () => makeHLGuess('after');
+});
+
 document.getElementById('play-online-btn').onclick = () => {
-    if (!myRoomData.roomId) return showModal("ERROR", "Make or Join a room first!");
-    if (myRoomData.players.length < 2) return showModal("ERROR", "Waiting for Player 2...");
+    if (!myRoomData.roomId) return showModal("ERROR", "No Room!");
+    if (myRoomData.players.length < 2) return showModal("ERROR", "Wait for P2");
 
-    if (!amILeader) {
-        showModal("ACCESS DENIED", "Only the Room Leader (👑) can start the game!");
-        return;
+    if (amILeader) {
+        socket.emit('start-game-request', {
+            roomId: myRoomData.roomId,
+            variant: currentVariant, // <--- IMPORTANT: Sends 'search' or 'random'
+            phase: gameState.phase    // <--- IMPORTANT: Sends 'drafting' or 'higher_lower'
+        });
     }
-
-    // Send the variant selection to the server
-    socket.emit('start-game-request', {
-        roomId: myRoomData.roomId,
-        variant: currentVariant
-    });
 };
 
 function closeModals() {
@@ -536,12 +567,17 @@ function updateDraftHeader() {
     const rrBtn = document.getElementById('reroll-btn');
     if (!indicator || !rrBtn) return;
 
-    // Guaranteed Text (No more "...")
+    // Ensure state exists
+    if (!gameState.player1 || !gameState.player2) {
+        gameState.player1 = { rerolls: 2 };
+        gameState.player2 = { rerolls: 2 };
+    }
+
     if (!myRoomData.isOnline) {
         indicator.innerText = (gameState.turn === 'p1') ? "PLAYER 1: DRAFT 10 GAMES" : "PLAYER 2: DRAFT 10 GAMES";
     } else {
-        const opponentName = getPlayerName(myIdentity === 'p1' ? 'p2' : 'p1');
-        indicator.innerText = `DRAFTING FOR ${opponentName}`;
+        const opp = (myIdentity === 'p1') ? 'p2' : 'p1';
+        indicator.innerText = `DRAFTING FOR ${getPlayerName(opp)}`;
     }
 
     const currentPlayer = (gameState.turn === 'p1') ? gameState.player1 : gameState.player2;
@@ -646,4 +682,78 @@ function addGameFromSearch(game) {
     document.getElementById('game-library').appendChild(card);
     document.getElementById('counter').innerText = `SELECTED: ${currentSelections.length} / 10`;
     document.getElementById('confirm-btn').disabled = (currentSelections.length !== 10);
+}
+
+function setupHLRound() {
+    document.getElementById('hl-phase').style.display = 'flex';
+
+    // Update Turn Text
+    const name = (gameState.turn === 'p1') ? getPlayerName('p1') : getPlayerName('p2');
+    document.getElementById('hl-turn-indicator').innerText = `${name}'S TURN`;
+
+    // Update Round UI
+    document.getElementById('hl-round-num').innerText = hlState.roundCount + 1;
+
+    // Remove feedback colors
+    document.getElementById('hl-next-card').classList.remove('correct', 'incorrect');
+
+    // Standard Card (Left)
+    const stdYear = hlState.currentStandardGame.released.split('-')[0];
+    document.getElementById('hl-standard-year').innerText = stdYear;
+    document.getElementById('hl-standard-name').innerText = hlState.currentStandardGame.name;
+    document.getElementById('hl-standard-img').src = hlState.currentStandardGame.background_image;
+
+    // Next Card (Right)
+    document.getElementById('hl-next-name').innerText = hlState.nextGame.name;
+    document.getElementById('hl-next-img').src = hlState.nextGame.background_image;
+
+    const yearBadge = document.getElementById('hl-next-year');
+    yearBadge.classList.add('hidden');
+    yearBadge.innerText = "????";
+
+    // Controls
+    const isMyTurn = (myRoomData.isOnline) ? (myIdentity === gameState.turn) : true;
+    document.getElementById('hl-controls').style.display = isMyTurn ? 'flex' : 'none';
+}
+
+function makeHLGuess(choice) {
+    const stdYear = parseInt(hlState.currentStandardGame.released.split('-')[0]);
+    const nextYear = parseInt(hlState.nextGame.released.split('-')[0]);
+
+    const isCorrect = (choice === 'before') ? (nextYear <= stdYear) : (nextYear >= stdYear);
+
+    // 1. REVEAL: Show the year and remove the "hidden" blur
+    const yearBadge = document.getElementById('hl-next-year');
+    yearBadge.innerText = nextYear;
+    yearBadge.classList.remove('hidden');
+
+    // 2. FEEDBACK: Apply Green or Red border to the card
+    const nextCard = document.getElementById('hl-next-card');
+    if (isCorrect) {
+        nextCard.classList.add('correct');
+        if (gameState.turn === 'p1') hlState.p1Score += 10;
+        else hlState.p2Score += 10;
+    } else {
+        nextCard.classList.add('incorrect');
+    }
+
+    // Update UI Scores immediately
+    document.getElementById('hl-p1-score').innerText = hlState.p1Score;
+    document.getElementById('hl-p2-score').innerText = hlState.p2Score;
+
+    // 3. MULTIPLAYER SYNC: Send the result to the other player
+    if (myRoomData.isOnline) {
+        socket.emit('hl-guess-sync', {
+            roomId: myRoomData.roomId,
+            score1: hlState.p1Score,
+            score2: hlState.p2Score,
+            nextYear: nextYear,
+            isCorrect: isCorrect // Send the result so P2 sees the color too
+        });
+    }
+
+    // 4. WAIT: Let them see the result for 2 seconds before swapping
+    setTimeout(() => {
+        proceedHL();
+    }, 2000);
 }

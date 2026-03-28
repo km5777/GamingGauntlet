@@ -38,6 +38,7 @@ function connectMultiplayer() {
         myRoomData.isOnline = true;
     });
 
+
     // --- NEW: Universal Room Updater (Handles Joins, Leaves, Kicks, Leadership changes) ---
     socket.on('room-updated', (data) => {
         myRoomData.players = data.players;
@@ -74,17 +75,40 @@ function connectMultiplayer() {
 
     socket.on('init-online-game', (data) => {
         closeModals();
-        currentVariant = data.variant; // Sync the variant from the room leader
+        currentVariant = data.variant;
+        gameState.phase = data.phase; // higher_lower or drafting
 
         document.getElementById('main-menu').style.display = 'none';
         document.getElementById('app').style.display = 'block';
         document.getElementById('leave-game-btn').style.display = 'block';
 
-        loadGames();
+        if (gameState.phase === 'higher_lower') {
+            initHigherLower(); // Both players start H/L
+        } else {
+            loadGames(); // Both players start Keep/Kill
+        }
+    });
 
-        setTimeout(() => {
-            updateDraftHeader();
-        }, 1000);
+    socket.on('hl-sync-reveal', (data) => {
+        // Update Scores
+        hlState.p1Score = data.score1;
+        hlState.p2Score = data.score2;
+        document.getElementById('hl-p1-score').innerText = data.score1;
+        document.getElementById('hl-p2-score').innerText = data.score2;
+
+        // Reveal Year
+        const yearBadge = document.getElementById('hl-next-year');
+        yearBadge.innerText = data.nextYear;
+        yearBadge.classList.remove('hidden');
+
+        // Apply Feedback Color (Red or Green)
+        const nextCard = document.getElementById('hl-next-card');
+        if (data.isCorrect) {
+            nextCard.classList.add('correct');
+        } else {
+            nextCard.classList.add('incorrect');
+        }
+
     });
 
     socket.on('update-draft-status', (players) => {
