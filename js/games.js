@@ -8,15 +8,10 @@ async function loadGames() {
     document.getElementById('loading-screen').style.display = 'flex';
     document.getElementById('app').style.display = 'none';
 
-    // If Online and NOT Leader, stop here. Wait for the socket to send data.
+    // THE HARD BLOCK: If online and NOT leader, stop immediately.
+    // P2 stays on loading screen until 'init-library' arrives in multiplayer.js
     if (myRoomData.isOnline && !amILeader) {
-        document.querySelector('.loading-text').innerText = "WAITING FOR LEADER TO SYNC ARENA...";
-        return;
-    }
-
-    // SEARCH MODE (Special Case)
-    if (currentVariant === 'search' && gameState.phase === 'drafting') {
-        finalizeGameStart([], []); // Search doesn't need a library fetch
+        document.querySelector('.loading-text').innerText = "WAITING FOR LEADER TO SYNC...";
         return;
     }
 
@@ -38,7 +33,7 @@ async function loadGames() {
         masterGameLibrary.sort(() => Math.random() - 0.5);
         draftingPool = [...masterGameLibrary];
 
-        // SYNC TO FRIEND
+        // Sync everything to the guest immediately
         if (myRoomData.isOnline && amILeader) {
             socket.emit('sync-library', {
                 roomId: myRoomData.roomId,
@@ -48,10 +43,8 @@ async function loadGames() {
         }
 
         finalizeGameStart();
-
     } catch (e) {
         console.error(e);
-        showModal("ERROR", "API Failure.");
         resetGameToMenu();
     }
 }

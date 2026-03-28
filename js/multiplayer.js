@@ -92,7 +92,7 @@ function connectMultiplayer() {
     socket.on('init-library', (data) => {
         masterGameLibrary = data.library;
         draftingPool = data.pool;
-        finalizeGameStart(); // Trigger the start for Player 2
+        finalizeGameStart();
     });
 
     // Higher/Lower Reveal Sync
@@ -141,9 +141,10 @@ function connectMultiplayer() {
     });
 
     // P2 receives the EXACT next game when P1's turn ends
-    socket.on('hl-receive-next', (nextGame) => {
-        hlState.currentStandardGame = hlState.nextGame; // Old next becomes standard
-        hlState.nextGame = nextGame;
+    socket.on('hl-receive-next', (nextGameObj) => {
+        // Shift locally on Guest's screen
+        hlState.currentStandardGame = hlState.nextGame;
+        hlState.nextGame = nextGameObj;
         setupHLRound();
     });
 

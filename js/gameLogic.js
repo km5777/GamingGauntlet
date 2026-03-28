@@ -48,19 +48,16 @@ function initHigherLower() {
 
 function proceedHL() {
     hlState.roundCount++;
-
     if (hlState.roundCount >= 20) {
-        // ... winner logic ...
         const winner = hlState.p1Score > hlState.p2Score ? getPlayerName('p1') : getPlayerName('p2');
         showModal("GAME OVER", `${winner} WINS!`);
         resetGameToMenu();
         return;
     }
 
-    // SWAP TURN
     gameState.turn = (gameState.turn === 'p1') ? 'p2' : 'p1';
 
-    // AUTHORITY CHECK: Only the Leader (or local player) picks the next game
+    // Only Leader (or local) updates the game state. Guest waits for the socket signal.
     if (!myRoomData.isOnline || amILeader) {
         hlState.currentStandardGame = hlState.nextGame;
         hlState.nextGame = masterGameLibrary.pop();
@@ -73,6 +70,37 @@ function proceedHL() {
         }
         setupHLRound();
     }
+}
+
+function setupHLRound() {
+    document.getElementById('hl-phase').style.display = 'flex';
+
+    // FIX NAMES: Update the scoreboard labels using the new IDs
+    const p1Name = getPlayerName('p1');
+    const p2Name = getPlayerName('p2');
+    document.getElementById('hl-p1-label').innerHTML = `${p1Name}: <span id="hl-p1-score">${hlState.p1Score}</span>`;
+    document.getElementById('hl-p2-label').innerHTML = `${p2Name}: <span id="hl-p2-score">${hlState.p2Score}</span>`;
+
+    // Set the Turn Header to the actual player name
+    const activePlayerName = getPlayerName(gameState.turn);
+    document.getElementById('hl-turn-indicator').innerText = `${activePlayerName}'S TURN`;
+
+    document.getElementById('hl-round-num').innerText = hlState.roundCount + 1;
+    document.getElementById('hl-next-card').classList.remove('correct', 'incorrect');
+
+    // Standard Game UI
+    const stdYear = hlState.currentStandardGame.released.split('-')[0];
+    document.getElementById('hl-standard-year').innerText = stdYear;
+    document.getElementById('hl-standard-name').innerText = hlState.currentStandardGame.name;
+    document.getElementById('hl-standard-img').src = hlState.currentStandardGame.background_image;
+
+    // Next Game UI
+    document.getElementById('hl-next-name').innerText = hlState.nextGame.name;
+    document.getElementById('hl-next-img').src = hlState.nextGame.background_image;
+    document.getElementById('hl-next-year').classList.add('hidden');
+
+    const isMyTurn = (myRoomData.isOnline) ? (myIdentity === gameState.turn) : true;
+    document.getElementById('hl-controls').style.display = isMyTurn ? 'flex' : 'none';
 }
 
 function handleConfirm() {
