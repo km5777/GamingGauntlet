@@ -118,13 +118,18 @@ function connectMultiplayer() {
 
     socket.on('update-draft-status', (players) => {
         if (!myRoomData.isOnline) return;
-        const p1Ready = players.find(p => p.role === 'p1').ready;
-        const p2Ready = players.find(p => p.role === 'p2').ready;
 
-        if (myIdentity === 'p1' && p1Ready && !p2Ready) {
+        const p1 = players.find(p => p.role === 'p1');
+        const p2 = players.find(p => p.role === 'p2');
+
+        if (!p1 || !p2) return;
+
+        if (myIdentity === 'p1' && p1.ready && !p2.ready) {
             document.getElementById('turn-indicator').innerText = "WAITING FOR FRIEND...";
-        } else if (myIdentity === 'p2' && !p2Ready && p1Ready) {
-            // Leader (P1) is done. Automatically move P2 to their drafting turn.
+        }
+        else if (myIdentity === 'p2' && p1.ready && !p2.ready) {
+            // This is the trigger that fixes the Player 2 desync!
+            // If P1 is ready and P2 hasn't started yet, force P2 to start.
             startPlayer2Draft();
         }
     });

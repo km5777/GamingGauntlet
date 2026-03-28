@@ -151,17 +151,6 @@ io.on('connection', (socket) => {
 
 });
 
-socket.on('update-draft-status', (players) => {
-    const p1Ready = players.find(p => p.role === 'p1').ready;
-    const p2Ready = players.find(p => p.role === 'p2').ready;
-
-    if (myIdentity === 'p1' && p1Ready && !p2Ready) {
-        document.getElementById('turn-indicator').innerText = "WAITING FOR P2...";
-    } else if (myIdentity === 'p2' && !p2Ready && p1Ready) {
-        // P1 finished, now P2's UI MUST refresh
-        startPlayer2Draft();
-    }
-});
 
 const PORT = process.env.PORT || 3000;
 http.listen(PORT, () => console.log(`Server running on port ${PORT}`));
