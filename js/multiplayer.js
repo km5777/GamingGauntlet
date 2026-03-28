@@ -11,15 +11,13 @@ let myRoomData = {
     players: []
 };
 
-/**
- * Initiates the connection to the server.
- * This is only called when you interact with the 'Rooms' menu.
- */
+const SERVER_URL = "https://your-app-name.onrender.com";
+
 function connectMultiplayer() {
     if (socket && socket.connected) return;
 
-    // Connect to your local server
-    socket = io('http://localhost:3000');
+    // Use the online URL instead of localhost
+    socket = io(SERVER_URL);
 
     // --- LOBBY EVENTS ---
 
@@ -130,6 +128,14 @@ function renderLobby(roomId, players) {
         li.style.fontSize = "22px";
         li.style.fontWeight = "900";
         list.appendChild(li);
+    });
+
+    socket.on('connect', () => {
+        console.log("Connected to server!");
+    });
+
+    socket.on('connect_error', () => {
+        showModal("SERVER WAKING UP", "The free server is currently sleeping. Please wait about 60 seconds and try again!");
     });
 
     if (players.length === 2) {
