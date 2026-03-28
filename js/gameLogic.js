@@ -42,7 +42,6 @@ function initHigherLower() {
 function proceedHL() {
     hlState.roundCount++;
 
-    // Check for end of game
     if (hlState.roundCount >= 20) {
         const winner = hlState.p1Score > hlState.p2Score ? getPlayerName('p1') : getPlayerName('p2');
         showModal("GAME OVER", `${winner} WINS!`);
@@ -50,25 +49,27 @@ function proceedHL() {
         return;
     }
 
-    // Swap logical turn
-    gameState.turn = (gameState.turn === 'p1') ? 'p2' : 'p1';
+    // Move turn forward
+    const nextTurn = (gameState.turn === 'p1') ? 'p2' : 'p1';
 
-    // AUTHORITY: Only Leader (or local) picks the next game. 
-    // Guest MUST NOT run .pop() or they will get a different game.
     if (!myRoomData.isOnline || amILeader) {
+        // Leader decides the next game
         hlState.currentStandardGame = hlState.nextGame;
         hlState.nextGame = masterGameLibrary.pop();
+        gameState.turn = nextTurn;
 
         if (myRoomData.isOnline) {
             socket.emit('hl-next-game-sync', {
                 roomId: myRoomData.roomId,
-                nextGame: hlState.nextGame
+                std: hlState.currentStandardGame,
+                nextGame: hlState.nextGame,
+                turn: gameState.turn,
+                round: hlState.roundCount,
+                p1Score: hlState.p1Score,
+                p2Score: hlState.p2Score
             });
         }
         setupHLRound();
-    } else {
-        // Guest just waits. 'hl-receive-next' in multiplayer.js will call setupHLRound.
-        console.log("Guest waiting for next game sync...");
     }
 }
 

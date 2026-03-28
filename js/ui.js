@@ -686,62 +686,94 @@ function addGameFromSearch(game) {
     document.getElementById('confirm-btn').disabled = (currentSelections.length !== 10);
 }
 
+let isRevealing = false;
 
 function setupHLRound() {
-    // 1. Show the screen
-    document.getElementById('hl-phase').style.display = 'flex';
-    document.getElementById('loading-screen').style.display = 'none';
+    isRevealing = false;
+    // 1. Show the container immediately
+    const hlPage = document.getElementById('hl-phase');
+    if (hlPage) hlPage.style.display = 'flex';
 
-    // 2. NAME FIX: Ensure we have names before rendering labels
+    // 2. DATA CHECK: If games aren't in hlState yet, stop and wait for the socket
+    if (!hlState.currentStandardGame || !hlState.nextGame) {
+        console.log("Waiting for data sync...");
+        const indicator = document.getElementById('hl-turn-indicator');
+        if (indicator) indicator.innerText = "SYNCHRONIZING ARENA...";
+        return;
+    }
+
+    // 3. APPLY NAMES (Using your logic)
     const p1Name = getPlayerName('p1');
     const p2Name = getPlayerName('p2');
-
     const label1 = document.getElementById('hl-p1-label');
     const label2 = document.getElementById('hl-p2-label');
 
     if (label1) label1.innerHTML = `${p1Name}: <span id="hl-p1-score">${hlState.p1Score}</span>`;
     if (label2) label2.innerHTML = `${p2Name}: <span id="hl-p2-score">${hlState.p2Score}</span>`;
 
-    const activePlayerName = getPlayerName(gameState.turn);
-    document.getElementById('hl-turn-indicator').innerText = `${activePlayerName}'S TURN`;
+    // 4. TURN INDICATOR (Overwrites SYNCING text)
+    const activeName = getPlayerName(gameState.turn);
+    const turnHeader = document.getElementById('hl-turn-indicator');
+    if (turnHeader) turnHeader.innerText = `${activeName.toUpperCase()}'S TURN`;
 
-    // 3. UI Updates
-    document.getElementById('hl-round-num').innerText = hlState.roundCount + 1;
-    document.getElementById('hl-next-card').classList.remove('correct', 'incorrect');
+    // 5. ROUND & FEEDBACK RESET
+    const roundNum = document.getElementById('hl-round-num');
+    if (roundNum) roundNum.innerText = hlState.roundCount + 1;
 
-    // Standard Game
-    if (hlState.currentStandardGame) {
-        const stdYear = hlState.currentStandardGame.released.split('-')[0];
-        document.getElementById('hl-standard-year').innerText = stdYear;
-        document.getElementById('hl-standard-name').innerText = hlState.currentStandardGame.name;
-        document.getElementById('hl-standard-img').src = hlState.currentStandardGame.background_image;
+    const nextCard = document.getElementById('hl-next-card');
+    if (nextCard) nextCard.classList.remove('correct', 'incorrect');
+
+    // 6. RENDER IMAGES (With safety fallbacks)
+    const stdImg = document.getElementById('hl-standard-img');
+    const nxtImg = document.getElementById('hl-next-img');
+    const stdTitle = document.getElementById('hl-standard-name');
+    const nxtTitle = document.getElementById('hl-next-name');
+    const stdYear = document.getElementById('hl-standard-year');
+
+    if (stdImg) stdImg.src = hlState.currentStandardGame.background_image || "";
+    if (nxtImg) nxtImg.src = hlState.nextGame.background_image || "";
+    if (stdTitle) stdTitle.innerText = hlState.currentStandardGame.name || "Unknown";
+    if (nxtTitle) nxtTitle.innerText = hlState.nextGame.name || "Unknown";
+
+    if (stdYear) {
+        const yearValue = hlState.currentStandardGame.released ? hlState.currentStandardGame.released.split('-')[0] : "N/A";
+        stdYear.innerText = yearValue;
     }
 
-    // Next Game
-    if (hlState.nextGame) {
-        document.getElementById('hl-next-name').innerText = hlState.nextGame.name;
-        document.getElementById('hl-next-img').src = hlState.nextGame.background_image;
-        document.getElementById('hl-next-year').classList.add('hidden');
+    // 7. RESET "????" BADGE
+    const nextBadge = document.getElementById('hl-next-year');
+    if (nextBadge) {
+        nextBadge.innerText = "????";
+        nextBadge.classList.add('hidden');
     }
 
-    // Control Visibility
+    // 8. BUTTON VISIBILITY (Only show for the active player)
     const isMyTurn = (myRoomData.isOnline) ? (myIdentity === gameState.turn) : true;
-    document.getElementById('hl-controls').style.display = isMyTurn ? 'flex' : 'none';
+    const controls = document.getElementById('hl-controls');
+    if (controls) controls.style.display = isMyTurn ? 'flex' : 'none';
 }
 
 
 function makeHLGuess(choice) {
-    const stdYear = parseInt(hlState.currentStandardGame.released.split('-')[0]);
-    const nextYear = parseInt(hlState.nextGame.released.split('-')[0]);
+    if (isRevealing) return;
+    isRevealing = true;
+
+    // BLOCK CLICK IF GAMES ARE MISSING (Prevents the 'released' error)
+    if (!hlState.currentStandardGame || !hlState.nextGame) {
+        isRevealing = false;
+        return;
+    }
+
+    const stdYear = hlState.currentStandardGame.released ? parseInt(hlState.currentStandardGame.released.split('-')[0]) : 0;
+    const nextYear = hlState.nextGame.released ? parseInt(hlState.nextGame.released.split('-')[0]) : 0;
 
     const isCorrect = (choice === 'before') ? (nextYear <= stdYear) : (nextYear >= stdYear);
 
-    // 1. REVEAL: Show the year and remove the "hidden" blur
+    // Visual Reveal
     const yearBadge = document.getElementById('hl-next-year');
-    yearBadge.innerText = nextYear;
+    yearBadge.innerText = nextYear === 0 ? "N/A" : nextYear;
     yearBadge.classList.remove('hidden');
 
-    // 2. FEEDBACK: Apply Green or Red border to the card
     const nextCard = document.getElementById('hl-next-card');
     if (isCorrect) {
         nextCard.classList.add('correct');
@@ -751,22 +783,20 @@ function makeHLGuess(choice) {
         nextCard.classList.add('incorrect');
     }
 
-    // Update UI Scores immediately
+    // Update scores in UI
     document.getElementById('hl-p1-score').innerText = hlState.p1Score;
     document.getElementById('hl-p2-score').innerText = hlState.p2Score;
 
-    // 3. MULTIPLAYER SYNC: Send the result to the other player
     if (myRoomData.isOnline) {
         socket.emit('hl-guess-sync', {
             roomId: myRoomData.roomId,
             score1: hlState.p1Score,
             score2: hlState.p2Score,
-            nextYear: nextYear,
-            isCorrect: isCorrect // Send the result so P2 sees the color too
+            nextYear: nextYear === 0 ? "N/A" : nextYear,
+            isCorrect: isCorrect
         });
     }
 
-    // 4. WAIT: Let them see the result for 2 seconds before swapping
     setTimeout(() => {
         proceedHL();
     }, 2000);

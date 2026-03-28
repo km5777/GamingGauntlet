@@ -91,11 +91,19 @@ function connectMultiplayer() {
 
     socket.on('send-library-to-guest', () => {
         if (amILeader) {
-            socket.emit('sync-library', {
-                roomId: myRoomData.roomId,
-                library: masterGameLibrary,
-                pool: draftingPool
-            });
+            if (typeof masterGameLibrary !== 'undefined' && masterGameLibrary.length > 0) {
+                socket.emit('sync-library', {
+                    roomId: myRoomData.roomId,
+                    library: masterGameLibrary,
+                    pool: draftingPool
+                });
+            } else {
+                if (typeof isGuestWaiting !== 'undefined') {
+                    isGuestWaiting = true;
+                } else {
+                    window.isGuestWaiting = true;
+                }
+            }
         }
     });
 
@@ -108,9 +116,35 @@ function connectMultiplayer() {
 
     // 3. Everyone receives the start games
     socket.on('hl-init-games', (data) => {
+        console.log("Sync data received from leader:", data);
+        // Force the data into the variables
         hlState.currentStandardGame = data.std;
         hlState.nextGame = data.next;
+        gameState.turn = data.turn || 'p1';
+
+        // Now tell the UI to draw
         setupHLRound();
+    });
+
+    socket.on('hl-receive-next', (data) => {
+        console.log("Next round data received:", data);
+        
+        // ONLY the guest shifts the games. The Leader already shifted them in proceedHL.
+        if (!amILeader) {
+            if (data.std) hlState.currentStandardGame = data.std;
+            if (data.nextGame) hlState.nextGame = data.nextGame;
+            
+            // STRICTLY overwrite guest state so it never falls out of sync
+            if (data.turn) gameState.turn = data.turn;
+            if (typeof data.round !== 'undefined') hlState.roundCount = data.round;
+            if (typeof data.p1Score !== 'undefined') hlState.p1Score = data.p1Score;
+            if (typeof data.p2Score !== 'undefined') hlState.p2Score = data.p2Score;
+            
+            setupHLRound();
+        } else {
+            // Leader just syncs the turn to avoid any potential visual mismatches
+            if (data.turn) gameState.turn = data.turn;
+        }
     });
 
     // 4. Update Reveal Sync to handle turn swaps properly
@@ -158,13 +192,7 @@ function connectMultiplayer() {
 
 
 
-    // P2 receives the EXACT next game when P1's turn ends
-    socket.on('hl-receive-next', (nextGameObj) => {
-        // Shift locally on Guest's screen
-        hlState.currentStandardGame = hlState.nextGame;
-        hlState.nextGame = nextGameObj;
-        setupHLRound();
-    });
+
 
     socket.on('start-duel-phase', () => {
         if (!myRoomData.isOnline) return;

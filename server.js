@@ -81,12 +81,13 @@ io.on('connection', (socket) => {
 
     // Sync the Higher/Lower Start
     socket.on('hl-start-game', (data) => {
+        // data contains { roomId, std, next, turn }
         io.to(data.roomId).emit('hl-init-games', data);
     });
 
-    // Sync the "Next" game when a round ends
+    // Relay for the next round
     socket.on('hl-next-game-sync', (data) => {
-        socket.to(data.roomId).emit('hl-receive-next', data.nextGame);
+        io.to(data.roomId).emit('hl-receive-next', data);
     });
 
     socket.on('start-game-request', (data) => {

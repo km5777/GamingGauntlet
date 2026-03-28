@@ -2,6 +2,7 @@ const API_KEY = "62593b97a74e46aca2f4820ee2548f86";
 let masterGameLibrary = []; // One massive bucket of thousands of famous games
 let currentVariant = 'random';
 let draftingPool = [];
+let isGuestWaiting = false;
 
 async function loadGames() {
     document.getElementById('main-menu').style.display = 'none';
@@ -28,15 +29,28 @@ async function loadGames() {
         masterGameLibrary = bigList.filter((game, index, self) =>
             game.background_image !== null && game.added > 2500 &&
             index === self.findIndex((g) => g.id === game.id)
-        );
+        ).map(game => ({
+            id: game.id,
+            name: game.name,
+            background_image: game.background_image,
+            released: game.released || null
+        }));
 
         masterGameLibrary.sort(() => Math.random() - 0.5);
         draftingPool = [...masterGameLibrary];
 
-        // If local, start now. If online, we wait for P2 to ask via the socket listener in multiplayer.js
+        // If local, start now. If online, we wait for P2 to ask 
         if (!myRoomData.isOnline) {
             finalizeGameStart();
         } else {
+            if (amILeader && isGuestWaiting) {
+                socket.emit('sync-library', {
+                    roomId: myRoomData.roomId,
+                    library: masterGameLibrary,
+                    pool: draftingPool
+                });
+                isGuestWaiting = false;
+            }
             document.querySelector('.loading-text').innerText = "WAITING FOR FRIEND TO JOIN...";
         }
 
@@ -49,27 +63,29 @@ async function loadGames() {
 function finalizeGameStart() {
     document.getElementById('loading-screen').style.display = 'none';
     document.getElementById('app').style.display = 'block';
-    document.getElementById('leave-game-btn').style.display = 'block';
 
     if (gameState.phase === "higher_lower") {
         document.getElementById('draft-phase').style.display = 'none';
         document.getElementById('hl-phase').style.display = 'flex';
 
         if (!myRoomData.isOnline || amILeader) {
+            // Leader generates the first round
             hlState.currentStandardGame = masterGameLibrary.pop();
             hlState.nextGame = masterGameLibrary.pop();
+            gameState.turn = 'p1';
 
             if (myRoomData.isOnline) {
                 socket.emit('hl-start-game', {
                     roomId: myRoomData.roomId,
                     std: hlState.currentStandardGame,
-                    next: hlState.nextGame
+                    next: hlState.nextGame,
+                    turn: gameState.turn
                 });
             }
             setupHLRound();
         }
     } else {
-        // Drafting Mode Logic...
+        // Drafting Mode (Keep/Kill)
         document.getElementById('draft-phase').style.display = 'block';
         document.getElementById('hl-phase').style.display = 'none';
         if (currentVariant === 'search') {
