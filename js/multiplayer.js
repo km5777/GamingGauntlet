@@ -134,6 +134,19 @@ function connectMultiplayer() {
         }
     });
 
+    socket.on('hl-init-games', (data) => {
+        hlState.currentStandardGame = data.std;
+        hlState.nextGame = data.next;
+        setupHLRound();
+    });
+
+    // P2 receives the EXACT next game when P1's turn ends
+    socket.on('hl-receive-next', (nextGame) => {
+        hlState.currentStandardGame = hlState.nextGame; // Old next becomes standard
+        hlState.nextGame = nextGame;
+        setupHLRound();
+    });
+
     socket.on('start-duel-phase', () => {
         if (!myRoomData.isOnline) return;
         gameState.phase = "keep_kill";

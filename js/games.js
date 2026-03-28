@@ -64,11 +64,24 @@ function finalizeGameStart() {
     if (gameState.phase === "higher_lower") {
         document.getElementById('draft-phase').style.display = 'none';
         document.getElementById('hl-phase').style.display = 'flex';
-        // Pop same games for both
-        hlState.currentStandardGame = masterGameLibrary.pop();
-        hlState.nextGame = masterGameLibrary.pop();
-        setupHLRound();
+
+        // Only Leader (or local player) picks the starting games
+        if (!myRoomData.isOnline || amILeader) {
+            hlState.currentStandardGame = masterGameLibrary.pop();
+            hlState.nextGame = masterGameLibrary.pop();
+
+            // Tell the friend exactly which two games we start with
+            if (myRoomData.isOnline) {
+                socket.emit('hl-start-game', {
+                    roomId: myRoomData.roomId,
+                    std: hlState.currentStandardGame,
+                    next: hlState.nextGame
+                });
+            }
+            setupHLRound();
+        }
     } else {
+        // Keep/Kill Logic
         document.getElementById('draft-phase').style.display = 'block';
         document.getElementById('hl-phase').style.display = 'none';
         if (currentVariant === 'search') {

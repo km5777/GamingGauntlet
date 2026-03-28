@@ -69,6 +69,15 @@ io.on('connection', (socket) => {
         }
     });
 
+    socket.on('hl-start-game', (data) => {
+        socket.to(data.roomId).emit('hl-init-games', data);
+    });
+
+    // Sync the "Next" game when a round ends
+    socket.on('hl-next-game-sync', (data) => {
+        socket.to(data.roomId).emit('hl-receive-next', data.nextGame);
+    });
+
     socket.on('start-game-request', (data) => {
         const room = rooms[data.roomId];
         if (room && room.players[0].id === socket.id) {
