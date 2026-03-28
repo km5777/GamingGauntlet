@@ -49,35 +49,30 @@ function initHigherLower() {
 function proceedHL() {
     hlState.roundCount++;
 
-    // End Game after 20 rounds (10 turns each)
     if (hlState.roundCount >= 20) {
-        let winnerMsg = "";
-        const p1N = getPlayerName('p1');
-        const p2N = getPlayerName('p2');
-
-        if (hlState.p1Score > hlState.p2Score) winnerMsg = `${p1N} WINS!`;
-        else if (hlState.p2Score > hlState.p1Score) winnerMsg = `${p2N} WINS!`;
-        else winnerMsg = "IT'S A TIE!";
-
-        showModal("GAME OVER", `${winnerMsg}\nFinal: ${p1N}: ${hlState.p1Score} | ${p2N}: ${hlState.p2Score}`);
+        // ... winner logic ...
+        const winner = hlState.p1Score > hlState.p2Score ? getPlayerName('p1') : getPlayerName('p2');
+        showModal("GAME OVER", `${winner} WINS!`);
         resetGameToMenu();
         return;
     }
 
-    // Shift games
-    hlState.currentStandardGame = hlState.nextGame;
-
-    // Safety check for empty library
-    if (masterGameLibrary.length === 0) {
-        console.log("Master library empty, refilling for H/L...");
-        masterGameLibrary = [...draftingPool].sort(() => Math.random() - 0.5);
-    }
-    hlState.nextGame = masterGameLibrary.pop();
-
-    // Swap Turn
+    // SWAP TURN
     gameState.turn = (gameState.turn === 'p1') ? 'p2' : 'p1';
 
-    setupHLRound();
+    // AUTHORITY CHECK: Only the Leader (or local player) picks the next game
+    if (!myRoomData.isOnline || amILeader) {
+        hlState.currentStandardGame = hlState.nextGame;
+        hlState.nextGame = masterGameLibrary.pop();
+
+        if (myRoomData.isOnline) {
+            socket.emit('hl-next-game-sync', {
+                roomId: myRoomData.roomId,
+                nextGame: hlState.nextGame
+            });
+        }
+        setupHLRound();
+    }
 }
 
 function handleConfirm() {

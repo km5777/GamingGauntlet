@@ -689,37 +689,30 @@ function addGameFromSearch(game) {
 function setupHLRound() {
     document.getElementById('hl-phase').style.display = 'flex';
 
+    // FIX NAMES: Update the Scoreboard Labels
     const p1Name = getPlayerName('p1');
     const p2Name = getPlayerName('p2');
-    document.querySelector('.p1-score').innerHTML = `${p1Name}: <span id="hl-p1-score">${hlState.p1Score}</span>`;
-    document.querySelector('.p2-score').innerHTML = `${p2Name}: <span id="hl-p2-score">${hlState.p2Score}</span>`;
 
-    // Set turn indicator name
+    // We target the parent boxes and keep the span IDs intact
+    document.querySelector('.hl-score-box.p1-score').innerHTML =
+        `${p1Name}: <span id="hl-p1-score">${hlState.p1Score}</span>`;
+    document.querySelector('.hl-score-box.p2-score').innerHTML =
+        `${p2Name}: <span id="hl-p2-score">${hlState.p2Score}</span>`;
+
+    // Update Turn Text
     const activeName = getPlayerName(gameState.turn);
     document.getElementById('hl-turn-indicator').innerText = `${activeName}'S TURN`;
 
-
-    // Update Round UI
-    document.getElementById('hl-round-num').innerText = hlState.roundCount + 1;
-
-    // Remove feedback colors
-    document.getElementById('hl-next-card').classList.remove('correct', 'incorrect');
-
-    // Standard Card (Left)
+    // ... rest of your setupHLRound (Setting images/years) ...
     const stdYear = hlState.currentStandardGame.released.split('-')[0];
     document.getElementById('hl-standard-year').innerText = stdYear;
     document.getElementById('hl-standard-name').innerText = hlState.currentStandardGame.name;
     document.getElementById('hl-standard-img').src = hlState.currentStandardGame.background_image;
 
-    // Next Card (Right)
     document.getElementById('hl-next-name').innerText = hlState.nextGame.name;
     document.getElementById('hl-next-img').src = hlState.nextGame.background_image;
+    document.getElementById('hl-next-year').classList.add('hidden');
 
-    const yearBadge = document.getElementById('hl-next-year');
-    yearBadge.classList.add('hidden');
-    yearBadge.innerText = "????";
-
-    // Controls
     const isMyTurn = (myRoomData.isOnline) ? (myIdentity === gameState.turn) : true;
     document.getElementById('hl-controls').style.display = isMyTurn ? 'flex' : 'none';
 }
