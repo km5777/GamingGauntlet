@@ -875,10 +875,22 @@ function setupBRGrids() {
     ['p1', 'p2'].forEach(p => {
         const slotsContainer = document.getElementById(`br-${p}-slots`);
         slotsContainer.innerHTML = '';
+        
+        let isOpponent = false;
+        if (myRoomData.isOnline && myIdentity !== p) isOpponent = true;
+
         for (let i = 0; i < draftLimit; i++) {
             const slot = document.createElement('div');
             slot.className = 'br-slot';
             slot.id = `br-${p}-slot-${i}`;
+            
+            if (isOpponent) {
+                slot.style.cursor = 'default';
+                slot.style.borderStyle = 'solid';
+                slot.style.borderColor = 'rgba(255, 255, 255, 0.05)';
+                slot.style.pointerEvents = 'none';
+            }
+
             slot.innerHTML = `<div class="br-slot-num">${i + 1}</div><div class="br-slot-content"></div>`;
             
             slot.onclick = () => {
@@ -978,6 +990,10 @@ function tryPlaceBRGame(role, slotIndex) {
 function updateBRSlot(role, slotIndex, game) {
     const slotEl = document.getElementById(`br-${role}-slot-${slotIndex}`);
     if (slotEl) {
+        let isMyGrid = false;
+        if (myRoomData.isOnline && myIdentity === role) isMyGrid = true;
+        if (!myRoomData.isOnline && gameState.turn === role) isMyGrid = true;
+        
         slotEl.querySelector('.br-slot-content').innerHTML = `
             <img src="${game.background_image || ''}" style="height: 50px; width: auto; max-width: 80px; object-fit: cover; border-radius: 4px;">
             <span style="font-size: 14px; font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding-left: 10px; width: 100%; color:var(--text-main);">${game.name}</span>
@@ -985,6 +1001,7 @@ function updateBRSlot(role, slotIndex, game) {
         slotEl.style.border = role === 'p1' ? '2px solid var(--neon-p1)' : '2px solid var(--neon-p2)';
         slotEl.style.boxShadow = role === 'p1' ? '0 0 10px rgba(0, 240, 255, 0.5)' : '0 0 10px rgba(255, 0, 255, 0.5)';
         slotEl.style.cursor = 'default';
+        if (isMyGrid) slotEl.style.pointerEvents = 'none';
     }
 }
 
