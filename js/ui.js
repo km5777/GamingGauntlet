@@ -576,8 +576,10 @@ function updateDraftHeader() {
     if (!myRoomData.isOnline) {
         indicator.innerText = (gameState.turn === 'p1') ? "PLAYER 1: DRAFT 10 GAMES" : "PLAYER 2: DRAFT 10 GAMES";
     } else {
-        const opp = (myIdentity === 'p1') ? 'p2' : 'p1';
-        indicator.innerText = `DRAFTING FOR ${getPlayerName(opp)}`;
+        // Use real names
+        const targetRole = (gameState.turn === 'p1') ? 'p2' : 'p1';
+        const targetName = getPlayerName(targetRole);
+        indicator.innerText = `DRAFTING FOR ${targetName}`;
     }
 
     const currentPlayer = (gameState.turn === 'p1') ? gameState.player1 : gameState.player2;
@@ -687,9 +689,15 @@ function addGameFromSearch(game) {
 function setupHLRound() {
     document.getElementById('hl-phase').style.display = 'flex';
 
-    // Update Turn Text
-    const name = (gameState.turn === 'p1') ? getPlayerName('p1') : getPlayerName('p2');
-    document.getElementById('hl-turn-indicator').innerText = `${name}'S TURN`;
+    const p1Name = getPlayerName('p1');
+    const p2Name = getPlayerName('p2');
+    document.querySelector('.p1-score').innerHTML = `${p1Name}: <span id="hl-p1-score">${hlState.p1Score}</span>`;
+    document.querySelector('.p2-score').innerHTML = `${p2Name}: <span id="hl-p2-score">${hlState.p2Score}</span>`;
+
+    // Set turn indicator name
+    const activeName = getPlayerName(gameState.turn);
+    document.getElementById('hl-turn-indicator').innerText = `${activeName}'S TURN`;
+
 
     // Update Round UI
     document.getElementById('hl-round-num').innerText = hlState.roundCount + 1;

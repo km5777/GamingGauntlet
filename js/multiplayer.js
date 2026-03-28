@@ -92,7 +92,7 @@ function connectMultiplayer() {
     socket.on('init-library', (data) => {
         masterGameLibrary = data.library;
         draftingPool = data.pool;
-        finalizeGameStart(); // Found in games.js
+        finalizeGameStart(); // Trigger the start for Player 2
     });
 
     // Higher/Lower Reveal Sync
@@ -109,8 +109,8 @@ function connectMultiplayer() {
         const nextCard = document.getElementById('hl-next-card');
         nextCard.classList.add(data.isCorrect ? 'correct' : 'incorrect');
 
-        // Only the player who DID NOT make the guess triggers the next round 
-        // after the same delay to keep screens in sync
+        // IMPORTANT: The person NOT currently playing the round 
+        // also needs to call proceedHL to move to the next game
         if (myIdentity !== gameState.turn) {
             setTimeout(() => proceedHL(), 2000);
         }
@@ -118,8 +118,15 @@ function connectMultiplayer() {
 
     socket.on('update-draft-status', (players) => {
         if (!myRoomData.isOnline) return;
-        const readyCount = players.filter(p => p.ready).length;
-        document.getElementById('turn-indicator').innerText = `WAITING (${readyCount}/2 READY)`;
+        const p1Ready = players.find(p => p.role === 'p1').ready;
+        const p2Ready = players.find(p => p.role === 'p2').ready;
+
+        if (myIdentity === 'p1' && p1Ready && !p2Ready) {
+            document.getElementById('turn-indicator').innerText = "WAITING FOR FRIEND...";
+        } else if (myIdentity === 'p2' && !p2Ready && p1Ready) {
+            // Leader (P1) is done. Automatically move P2 to their drafting turn.
+            startPlayer2Draft();
+        }
     });
 
     socket.on('start-duel-phase', () => {

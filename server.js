@@ -70,11 +70,13 @@ io.on('connection', (socket) => {
     });
 
     socket.on('start-game-request', (data) => {
-        // data contains { roomId, variant }
         const room = rooms[data.roomId];
         if (room && room.players[0].id === socket.id) {
-            // Tell everyone in the room to start the game with the chosen variant
-            io.to(data.roomId).emit('init-online-game', { variant: data.variant });
+            // Tell everyone the game is starting and WHICH mode it is
+            io.to(data.roomId).emit('init-online-game', {
+                variant: data.variant,
+                phase: data.phase
+            });
         }
     });
 
@@ -88,13 +90,30 @@ io.on('connection', (socket) => {
     });
 
     socket.on('sync-library', (data) => {
-        socket.to(data.roomId).emit('init-library', data);
+        socket.to(data.roomId).emit('init-library', {
+            library: data.library,
+            pool: data.pool
+        });
+    });
+
+    socket.on('player-ready-draft', (data) => {
+        const room = rooms[data.roomId];
+        if (room) {
+            const p = room.players.find(pl => pl.id === socket.id);
+            if (p) p.ready = true;
+            io.to(data.roomId).emit('update-draft-status', room.players);
+            if (room.players.every(pl => pl.ready)) io.to(data.roomId).emit('start-duel-phase');
+        }
     });
 
     // 2. Sync Higher/Lower Guesses (Ensures both see the reveal and swap)
     socket.on('hl-guess-sync', (data) => {
+        // Broadcast the choice result to both players so borders and years sync
         io.to(data.roomId).emit('hl-sync-reveal', data);
     });
+
+    socket.on('reveal-game', (data) => io.to(data.roomId).emit('opponent-revealed', data.game));
+    socket.on('decision-made', (data) => io.to(data.roomId).emit('opponent-decided', data));
 
     // 3. Sync Higher/Lower Turn Swaps
     socket.on('hl-next-round', (data) => {
@@ -130,32 +149,6 @@ io.on('connection', (socket) => {
         }
     });
 
-    socket.on('hl-guess-sync', (data) => {
-        socket.to(data.roomId).emit('hl-sync-reveal', data);
-    });
-
-    // Gameplay syncing events
-    socket.on('reveal-game', (data) => io.to(data.roomId).emit('opponent-revealed', data.game));
-    socket.on('decision-made', (data) => io.to(data.roomId).emit('opponent-decided', data));
-    socket.on('start-game-request', (data) => {
-        const room = rooms[data.roomId];
-        if (room && room.players[0].id === socket.id) {
-            // Tell everyone which mode AND which variant
-            io.to(data.roomId).emit('init-online-game', {
-                variant: data.variant,
-                phase: data.phase
-            });
-        }
-    });
-    socket.on('player-ready-draft', (data) => {
-        const room = rooms[data.roomId];
-        if (room) {
-            const p = room.players.find(pl => pl.id === socket.id);
-            if (p) p.ready = true;
-            io.to(data.roomId).emit('update-draft-status', room.players);
-            if (room.players.every(pl => pl.ready)) io.to(data.roomId).emit('start-duel-phase');
-        }
-    });
 });
 
 socket.on('update-draft-status', (players) => {
