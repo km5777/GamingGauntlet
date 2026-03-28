@@ -81,27 +81,21 @@ function proceedHL() {
 }
 
 function handleConfirm() {
-    if (myRoomData && myRoomData.isOnline) {
+    if (myRoomData.isOnline) {
         if (myIdentity === 'p1') gameState.player1.draftedForP2 = [...currentSelections];
         else gameState.player2.draftedForP1 = [...currentSelections];
 
         document.getElementById('confirm-btn').disabled = true;
         document.getElementById('confirm-btn').innerText = "WAITING...";
 
-        // ADD THIS CHECK: Only emit if socket exists
-        if (socket) {
-            socket.emit('player-ready-draft', { roomId: myRoomData.roomId });
-        }
+        socket.emit('player-ready-draft', { roomId: myRoomData.roomId });
     } else {
-        // ... (Keep your existing local swap logic)
-        if (gameState.player1.draftedForP2.length === 0) {
+        // Local Mode Logic
+        if (gameState.turn === 'p1') {
             gameState.player1.draftedForP2 = [...currentSelections];
-            currentSelections = [];
             startPlayer2Draft();
-            document.getElementById('confirm-btn').innerText = "CONFIRM DRAFT";
         } else {
             gameState.player2.draftedForP1 = [...currentSelections];
-            gameState.phase = "keep_kill";
             startKeepKillPhase();
         }
     }

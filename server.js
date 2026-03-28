@@ -87,6 +87,20 @@ io.on('connection', (socket) => {
         }
     });
 
+    socket.on('sync-library', (data) => {
+        socket.to(data.roomId).emit('init-library', data);
+    });
+
+    // 2. Sync Higher/Lower Guesses (Ensures both see the reveal and swap)
+    socket.on('hl-guess-sync', (data) => {
+        io.to(data.roomId).emit('hl-sync-reveal', data);
+    });
+
+    // 3. Sync Higher/Lower Turn Swaps
+    socket.on('hl-next-round', (data) => {
+        io.to(data.roomId).emit('hl-do-next-round');
+    });
+
     socket.on('kick-player', (data) => {
         const room = rooms[data.roomId];
         // Security check: Only leader can kick
@@ -142,6 +156,18 @@ io.on('connection', (socket) => {
             if (room.players.every(pl => pl.ready)) io.to(data.roomId).emit('start-duel-phase');
         }
     });
+});
+
+socket.on('update-draft-status', (players) => {
+    const p1Ready = players.find(p => p.role === 'p1').ready;
+    const p2Ready = players.find(p => p.role === 'p2').ready;
+
+    if (myIdentity === 'p1' && p1Ready && !p2Ready) {
+        document.getElementById('turn-indicator').innerText = "WAITING FOR P2...";
+    } else if (myIdentity === 'p2' && !p2Ready && p1Ready) {
+        // P1 finished, now P2's UI MUST refresh
+        startPlayer2Draft();
+    }
 });
 
 const PORT = process.env.PORT || 3000;

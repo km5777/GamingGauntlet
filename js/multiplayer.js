@@ -89,26 +89,31 @@ function connectMultiplayer() {
         }
     });
 
+    socket.on('init-library', (data) => {
+        masterGameLibrary = data.library;
+        draftingPool = data.pool;
+        finalizeGameStart(); // Found in games.js
+    });
+
+    // Higher/Lower Reveal Sync
     socket.on('hl-sync-reveal', (data) => {
-        // Update Scores
         hlState.p1Score = data.score1;
         hlState.p2Score = data.score2;
         document.getElementById('hl-p1-score').innerText = data.score1;
         document.getElementById('hl-p2-score').innerText = data.score2;
 
-        // Reveal Year
         const yearBadge = document.getElementById('hl-next-year');
         yearBadge.innerText = data.nextYear;
         yearBadge.classList.remove('hidden');
 
-        // Apply Feedback Color (Red or Green)
         const nextCard = document.getElementById('hl-next-card');
-        if (data.isCorrect) {
-            nextCard.classList.add('correct');
-        } else {
-            nextCard.classList.add('incorrect');
-        }
+        nextCard.classList.add(data.isCorrect ? 'correct' : 'incorrect');
 
+        // Only the player who DID NOT make the guess triggers the next round 
+        // after the same delay to keep screens in sync
+        if (myIdentity !== gameState.turn) {
+            setTimeout(() => proceedHL(), 2000);
+        }
     });
 
     socket.on('update-draft-status', (players) => {
