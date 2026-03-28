@@ -53,7 +53,8 @@
                 <div class="mode-icon">⚔️</div>
                 <div class="mode-info">
                     <h3>KEEP 5 / KILL 5</h3>
-                    <p>Draft 10 games for your rival. Survive the reveal.</p>
+                    <p>You and your friend draft 10 games. Then you have to decide which ones will stay and which ones
+                        will not.</p>
                 </div>
             </div>
 
@@ -122,6 +123,7 @@
                 <h2 id="turn-indicator" class="neon-text">...</h2>
                 <div class="draft-stats">
                     <span id="counter" class="counter-badge">SELECTED: 0 / 10</span>
+                    <button id="reroll-btn" class="glow-btn reroll-style">REFRESH LIST (2)</button>
                     <button id="confirm-btn" class="action-btn" disabled>CONFIRM DRAFT</button>
                 </div>
             </div>
@@ -172,6 +174,20 @@
             <h2 id="modal-title">NOTIFICATION</h2>
             <p id="modal-message">Message goes here.</p>
             <button id="modal-close-btn" class="glow-btn">CONTINUE</button>
+        </div>
+    </div>
+
+    <div id="modal-leave-confirm" class="modal-overlay" style="display: none;">
+        <div class="modal-content">
+            <h2 style="color: #ff5e62; font-family: var(--font-head); letter-spacing: 2px;">LEAVE?</h2>
+            <p style="font-size: 16px; margin-bottom: 30px; color: #e0e2ea;">Are you sure you want to abandon the match?
+                This will immediately end the game for both players.</p>
+            <div style="display: flex; gap: 20px; width: 100%; justify-content: center;">
+                <button id="cancel-leave-btn" class="glow-btn">CANCEL</button>
+                <button id="confirm-leave-btn" class="cyber-btn"
+                    style="background: linear-gradient(135deg, #f00946 0%, #ff5e62 100%); border: none; box-shadow: 0 10px 20px rgba(240, 9, 70, 0.3);">LEAVE
+                    MATCH</button>
+            </div>
         </div>
     </div>
 

@@ -1,16 +1,18 @@
 // The Master Game State
 let gameState = {
     phase: "drafting",
-    turn: "p1", // Who is currently choosing a game to reveal
+    turn: "p1",
     player1: {
         draftedForP2: [],
         keeps: [],
-        kills: []
+        kills: [],
+        rerolls: 2 // Player 1's rerolls
     },
     player2: {
         draftedForP1: [],
         keeps: [],
-        kills: []
+        kills: [],
+        rerolls: 2 // Player 2's rerolls
     }
 };
 

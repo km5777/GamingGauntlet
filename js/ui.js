@@ -32,20 +32,27 @@ function startGlobalTimer(seconds, onTimeout) {
     const bar = document.getElementById('timer-bar');
     if (!bar) return;
 
+    // 1. Immediately kill any ongoing transition and fill the bar
     bar.style.transition = 'none';
     bar.style.transform = 'scaleX(1)';
 
+    // 2. THE FIX: Force a DOM Reflow. 
+    // This forces the browser to instantly draw the full bar before starting the countdown.
+    void bar.offsetWidth;
+
+    // 3. Start the smooth CSS transition shrink
     setTimeout(() => {
         bar.style.transition = `transform ${seconds}s linear`;
         bar.style.transform = 'scaleX(0)';
     }, 50);
 
+    // 4. Start the logic countdown
     let timeLeft = seconds;
     countdown = setInterval(() => {
         timeLeft--;
         if (timeLeft <= 0) {
             clearInterval(countdown);
-            onTimeout();
+            if (typeof onTimeout === "function") onTimeout();
         }
     }, 1000);
 }
@@ -74,22 +81,25 @@ function renderGameLibrary(games) {
 }
 
 function startPlayer2Draft() {
-    if (myRoomData && myRoomData.isOnline) return;
+    gameState.turn = "p2";
+    currentSelections = [];
 
-    // Reset UI for Player 2
-    document.getElementById('turn-indicator').innerText = "PLAYER 2: DRAFT 10 GAMES";
+    updateDraftHeader();
     document.getElementById('counter').innerText = "SELECTED: 0 / 10";
+    document.getElementById('confirm-btn').disabled = true;
 
-    // Reset button
-    const confirmBtn = document.getElementById('confirm-btn');
-    confirmBtn.disabled = true;
-    confirmBtn.innerText = "CONFIRM DRAFT";
-
-    // Draw the second half of the library
-    renderGameLibrary(p2Library);
-
+    // Grab a FRESH 40 for Player 2
+    refreshLibraryUI();
     window.scrollTo(0, 0);
     showModal("TURN SWAP", "Player 1 Draft Complete! Pass the device to Player 2.");
+}
+
+// Add this to resetGameToMenu()
+function resetRerolls() {
+    gameState.player1.rerolls = 2;
+    gameState.player2.rerolls = 2;
+    rerollBtn.innerText = `REFRESH LIST (2)`;
+    rerollBtn.disabled = false;
 }
 // --- DUEL UI ---
 function startKeepKillPhase() {
@@ -306,35 +316,40 @@ function showModal(title, message) {
     };
 }
 
+
 function resetGameToMenu() {
-    // 1. Reset Logic Variables
     gameState.phase = "drafting";
     gameState.turn = "p1";
     gameState.player1 = { draftedForP2: [], keeps: [], kills: [] };
     gameState.player2 = { draftedForP1: [], keeps: [], kills: [] };
     currentSelections = [];
 
-    // 2. Reset Drafting UI
-    document.getElementById('counter').innerText = "SELECTED: 0 / 10";
-    document.getElementById('confirm-btn').disabled = true;
-    document.getElementById('turn-indicator').innerText = "PLAYER 1: DRAFT 10 GAMES";
-    document.getElementById('game-library').innerHTML = '';
+    // ADDED NULL CHECKS FOR ALL UI UPDATES
+    const counter = document.getElementById('counter');
+    if (counter) counter.innerText = "SELECTED: 0 / 10";
 
-    // 3. Reset Corner Grids
-    document.getElementById('p1-grid').innerHTML = '';
-    document.getElementById('p2-grid').innerHTML = '';
+    const confirmBtn = document.getElementById('confirm-btn');
+    if (confirmBtn) {
+        confirmBtn.disabled = true;
+        confirmBtn.innerText = "CONFIRM DRAFT";
+        confirmBtn.style.pointerEvents = "auto";
+    }
 
-    // 4. Toggle Screen Visibility
-    document.getElementById('app').style.display = 'none';
-    document.getElementById('duel-phase').style.display = 'none';
-    document.getElementById('draft-phase').style.display = 'block';
-    document.getElementById('main-menu').style.display = 'flex';
+    const indicator = document.getElementById('turn-indicator');
+    if (indicator) indicator.innerText = "PLAYER 1: DRAFT 10 GAMES";
 
-    // 5. Reset the Start Button
-    const startBtn = document.getElementById('start-game-btn');
-    startBtn.innerText = "ENTER ARENA";
-    startBtn.style.pointerEvents = "auto";
-    startBtn.style.width = ""; // Reset width if it was changed
+    // Hide gameplay, show menu
+    const app = document.getElementById('app');
+    const duel = document.getElementById('duel-phase');
+    const draft = document.getElementById('draft-phase');
+    const menu = document.getElementById('main-menu');
+    const leaveBtn = document.getElementById('leave-game-btn');
+
+    if (app) app.style.display = 'none';
+    if (duel) duel.style.display = 'none';
+    if (draft) draft.style.display = 'block';
+    if (menu) menu.style.display = 'flex';
+    if (leaveBtn) leaveBtn.style.display = 'none'; // Hide leave button on menu
 }
 
 document.getElementById('confirm-btn').onclick = handleConfirm;
@@ -415,19 +430,103 @@ function startEndGameCountdown(seconds) {
 }
 
 const leaveGameBtn = document.getElementById('leave-game-btn');
+const leaveModal = document.getElementById('modal-leave-confirm');
+const confirmLeaveBtn = document.getElementById('confirm-leave-btn');
+const cancelLeaveBtn = document.getElementById('cancel-leave-btn');
+
 if (leaveGameBtn) {
     leaveGameBtn.onclick = () => {
-        const confirmLeave = confirm("Are you sure you want to surrender and leave the match?");
-        if (confirmLeave) {
-            // If playing online, tell the server we are leaving the room
-            if (myRoomData && myRoomData.isOnline && typeof socket !== 'undefined' && socket) {
-                socket.emit('leave-room', myRoomData.roomId);
-                if (typeof resetLocalRoomState === 'function') resetLocalRoomState();
-            }
+        // Show our beautiful custom modal instead of the default browser popup
+        leaveModal.style.display = 'flex';
+    };
+}
 
-            // Immediately kick ourselves back to the menu
-            if (typeof countdown !== 'undefined') clearInterval(countdown);
-            resetGameToMenu();
+if (cancelLeaveBtn) {
+    cancelLeaveBtn.onclick = () => {
+        // Just hide the modal and go back to the game
+        leaveModal.style.display = 'none';
+    };
+}
+
+if (confirmLeaveBtn) {
+    confirmLeaveBtn.onclick = () => {
+        leaveModal.style.display = 'none';
+
+        // If playing online, tell the server we are leaving the room
+        if (typeof myRoomData !== 'undefined' && myRoomData && myRoomData.isOnline && typeof socket !== 'undefined' && socket) {
+            socket.emit('leave-room', myRoomData.roomId);
+            if (typeof resetLocalRoomState === 'function') resetLocalRoomState();
+        }
+
+        // Immediately kick ourselves back to the menu
+        if (typeof countdown !== 'undefined') clearInterval(countdown);
+        resetGameToMenu();
+    };
+}
+
+window.addEventListener('DOMContentLoaded', () => {
+    const music = document.getElementById('bg-music');
+    const volSlider = document.getElementById('volume-slider');
+
+    const savedVol = localStorage.getItem('gauntletVolume');
+    if (savedVol !== null && music && volSlider) {
+        music.volume = savedVol;
+        volSlider.value = savedVol;
+    }
+
+    if (volSlider) {
+        volSlider.oninput = (e) => {
+            const val = e.target.value;
+            if (music) music.volume = val;
+            localStorage.setItem('gauntletVolume', val);
+        };
+    }
+});
+
+// --- REFRESH / REROLL BUTTON ---
+const rerollBtn = document.getElementById('reroll-btn');
+if (rerollBtn) {
+    rerollBtn.onclick = () => {
+        const currentPlayer = (gameState.turn === 'p1') ? gameState.player1 : gameState.player2;
+
+        if (currentPlayer.rerolls > 0) {
+            currentPlayer.rerolls--;
+
+            // Clear current selections to prevent picking non-existent cards
+            currentSelections = [];
+            const counter = document.getElementById('counter');
+            if (counter) counter.innerText = "SELECTED: 0 / 10";
+            document.getElementById('confirm-btn').disabled = true;
+
+            // Pull a NEW 40 directly from the Master Pool
+            refreshLibraryUI();
+            updateDraftHeader();
+            window.scrollTo(0, 0);
         }
     };
+}
+
+function updateDraftHeader() {
+    const indicator = document.getElementById('turn-indicator');
+    const rrBtn = document.getElementById('reroll-btn');
+    if (!indicator || !rrBtn) return;
+
+    // Guaranteed Text (No more "...")
+    if (!myRoomData.isOnline) {
+        indicator.innerText = (gameState.turn === 'p1') ? "PLAYER 1: DRAFT 10 GAMES" : "PLAYER 2: DRAFT 10 GAMES";
+    } else {
+        const opponentName = getPlayerName(myIdentity === 'p1' ? 'p2' : 'p1');
+        indicator.innerText = `DRAFTING FOR ${opponentName}`;
+    }
+
+    const currentPlayer = (gameState.turn === 'p1') ? gameState.player1 : gameState.player2;
+    rrBtn.innerText = `REFRESH LIST (${currentPlayer.rerolls})`;
+    rrBtn.disabled = (currentPlayer.rerolls <= 0);
+}
+
+// Update this in startPlayer2Draft and resetGameToMenu to reset the button text
+function updateRerollButtonUI() {
+    const currentPlayer = (gameState.turn === 'p1') ? gameState.player1 : gameState.player2;
+    rerollBtn.innerText = `REFRESH LIST (${currentPlayer.rerolls})`;
+    rerollBtn.disabled = (currentPlayer.rerolls <= 0);
 }

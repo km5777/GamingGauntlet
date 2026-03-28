@@ -1,5 +1,10 @@
+* {
+    box-sizing: border-box;
+    /* Crucial: padding won't push width */
+}
+
+
 :root {
-    /* Modernized Accent Colors */
     --accent: #00f2fe;
     --accent-glow: rgba(0, 242, 254, 0.4);
     --neon-p1: #00ff88;
@@ -26,7 +31,96 @@ body {
     color: #e0e2ea;
     font-family: var(--font-ui);
     margin: 0;
+    padding: 0;
+    width: 100%;
+    min-height: 100vh;
     overflow-x: hidden;
+    /* Prevents horizontal shifting */
+    display: flex;
+    flex-direction: column;
+}
+
+/* --- RESPONSIVE CENTERING --- */
+.screen-center {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    width: 100%;
+    min-height: 100vh;
+    /* Remove position: absolute! It causes the centering to break on resize */
+}
+
+.full-page {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 100%;
+    min-height: 100vh;
+}
+
+/* Fix the Header to stay centered during resize */
+.ui-header {
+    width: 100%;
+    background: rgba(15, 16, 20, 0.95);
+    backdrop-filter: blur(20px);
+    padding: 20px 0;
+    position: sticky;
+    top: 0;
+    z-index: 1000;
+    border-bottom: var(--border-subtle);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    left: 0;
+}
+
+/* Ensure the grid wrapper is always centered */
+.grid-wrapper {
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    padding: 20px 0;
+}
+
+.centered-grid {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 20px;
+    width: 100%;
+    max-width: 1400px;
+    /* Limits width on big screens */
+    margin: 0 auto;
+}
+
+/* Fix background layers to stay pinned during resize */
+.bg-layer,
+.bg-vignette {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: -3;
+    pointer-events: none;
+}
+
+.bg-grid {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: -2;
+    background-image:
+        linear-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+    background-size: 60px 60px;
+    transform: perspective(1000px) rotateX(60deg);
+    transform-origin: top;
+    pointer-events: none;
 }
 
 /* --- ANIMATIONS --- */
@@ -244,14 +338,17 @@ input[type="text"]:focus {
 /* --- DRAFT PHASE UI --- */
 .ui-header {
     width: 100%;
-    background: rgba(15, 16, 20, 0.85);
+    background: rgba(15, 16, 20, 0.95);
     backdrop-filter: blur(20px);
-    padding: 25px 0;
-    text-align: center;
+    padding: 20px 0;
     position: sticky;
     top: 0;
-    z-index: 100;
+    z-index: 1000;
+    /* Ensure it stays above game cards */
     border-bottom: var(--border-subtle);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
 }
 
 .draft-stats {
@@ -277,20 +374,34 @@ input[type="text"]:focus {
     display: flex;
     flex-wrap: wrap;
     justify-content: center;
-    gap: 24px;
+    align-content: center;
+    gap: 15px;
+    width: 100%;
     max-width: 1400px;
-    padding: 30px 20px;
+    max-height: 100%;
+    overflow-y: auto;
+    /* Adds scroll only to the games list if it gets too big */
+    padding: 10px;
+}
+
+#turn-indicator {
+    font-size: 28px;
+    font-family: var(--font-head);
+    color: white;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    margin-bottom: 10px;
 }
 
 .game-card {
     width: 190px;
+    /* Locked size */
+    flex-shrink: 0;
     background: var(--surface-light);
-    border-radius: 20px;
-    border: 2px solid transparent;
-    cursor: pointer;
+    border-radius: 16px;
     overflow: hidden;
-    transition: transform 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
-    box-shadow: var(--shadow-soft);
+    transition: 0.3s;
+    border: 2px solid transparent;
 }
 
 .game-card:hover {
@@ -299,11 +410,9 @@ input[type="text"]:focus {
 }
 
 .game-card img {
+    height: 220px;
     width: 100%;
-    height: 260px;
     object-fit: cover;
-    pointer-events: none;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
 }
 
 .game-card h3 {
@@ -348,10 +457,13 @@ input[type="text"]:focus {
 }
 
 .reveal-image {
-    height: 30vh;
-    /* Shrunk down from 50vh */
-    max-height: 280px;
-    /* Capped much smaller */
+    width: auto;
+    max-width: 90vw;
+    height: auto;
+    max-height: 35vh;
+    /* Strictly caps the height */
+    object-fit: contain;
+    /* Ensures the whole image fits without cropping/stretching */
     border-radius: 16px;
     box-shadow: var(--shadow-hover), var(--inner-highlight);
     border: var(--border-subtle);
@@ -366,26 +478,50 @@ input[type="text"]:focus {
     letter-spacing: 1px;
 }
 
+#duel-phase {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    /* Pushes Header top, HUDs bottom */
+    align-items: center;
+    height: 100vh;
+    width: 100vw;
+    padding: 20px;
+    box-sizing: border-box;
+    overflow: hidden;
+    /* Prevents scrollbars */
+}
+
+.duel-top {
+    flex-shrink: 0;
+    width: 100%;
+    margin-top: 20px;
+    z-index: 10;
+}
+
 .duel-main {
+    flex-grow: 1;
+    /* Forces this section to take up all middle space */
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    min-height: 300px;
-    padding-bottom: 120px;
-    /* Added padding to prevent overlapping with the bottom HUDs */
+    width: 100%;
+    max-height: 55vh;
+    /* Prevents it from crushing the bottom HUDs */
+    z-index: 5;
+    gap: 20px;
 }
 
 .reveal-choice-card {
-    width: 140px;
-    /* Reduced from 200px */
+    width: 180px;
+    /* Increased from 130px */
     background: var(--surface-light);
     border-radius: 12px;
     border: var(--border-subtle);
     cursor: pointer;
     overflow: hidden;
-    transition: transform 0.3s, border-color 0.3s;
-    opacity: 0;
+    transition: transform 0.2s, border-color 0.2s;
     box-shadow: var(--shadow-soft);
 }
 
@@ -396,9 +532,34 @@ input[type="text"]:focus {
 
 .reveal-choice-card img {
     width: 100%;
-    height: 100px;
-    /* Reduced from 150px */
+    height: 120px;
+    /* Increased to match the wider card */
     object-fit: cover;
+}
+
+.game-card h3,
+.reveal-card-label {
+    font-size: 14px;
+    font-weight: 800;
+    /* BOLD */
+    text-align: center;
+    /* CENTERED TEXT */
+    margin: 0;
+    padding: 12px 10px;
+    background: var(--surface-dark);
+    color: white;
+
+    /* Flexbox guarantees the text is perfectly centered vertically and horizontally */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    white-space: normal;
+    /* Allows text to wrap to a second line instead of cutting off */
+    line-height: 1.3;
+    min-height: 48px;
+    /* Creates consistent height so row cards align perfectly */
+    border-top: 1px solid rgba(255, 255, 255, 0.05);
 }
 
 /* --- LEAVE GAME BUTTON STYLING --- */
@@ -449,13 +610,15 @@ input[type="text"]:focus {
 
 /* --- PLAYER HUDS & GRIDS --- */
 #player-huds {
-    position: fixed;
-    bottom: 30px;
-    width: 96%;
-    left: 2%;
+    flex-shrink: 0;
+    position: relative;
+    /* Changed from fixed so it stays inside the flex container */
+    width: 100%;
+    max-width: 1200px;
     display: flex;
     justify-content: space-between;
-    pointer-events: none;
+    margin-bottom: 10px;
+    z-index: 10;
 }
 
 .hud {
@@ -761,4 +924,50 @@ input[type="text"]:focus {
     color: var(--accent);
     animation: pulseGlow 2s infinite;
     font-weight: bold;
+}
+
+#leave-game-btn {
+    position: fixed;
+    top: 15px;
+    left: 20px;
+    z-index: 9999 !important;
+    /* Highest possible priority */
+    background: rgba(240, 9, 70, 0.2);
+    color: #ff5e62;
+    border: 1px solid rgba(240, 9, 70, 0.5);
+    padding: 10px 20px;
+    border-radius: 12px;
+    font-weight: 800;
+    cursor: pointer;
+    backdrop-filter: blur(10px);
+    display: none;
+    /* Hidden on menu, shown in game */
+}
+
+#leave-game-btn:hover {
+    background: #f00946;
+    color: white;
+    box-shadow: 0 0 20px rgba(240, 9, 70, 0.6);
+    transform: scale(1.05);
+}
+
+.reroll-style {
+    padding: 10px 20px !important;
+    font-size: 14px !important;
+    border-color: #ff9f43 !important;
+    color: #ff9f43 !important;
+    margin: 0 15px;
+}
+
+.reroll-style:hover {
+    background: #ff9f43 !important;
+    color: black !important;
+    box-shadow: 0 0 20px rgba(255, 159, 67, 0.4) !important;
+}
+
+.reroll-style:disabled {
+    border-color: #444 !important;
+    color: #666 !important;
+    cursor: not-allowed;
+    opacity: 0.5;
 }

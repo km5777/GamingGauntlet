@@ -74,17 +74,14 @@ function connectMultiplayer() {
         closeModals();
         document.getElementById('main-menu').style.display = 'none';
         document.getElementById('app').style.display = 'block';
+        document.getElementById('leave-game-btn').style.display = 'block';
+
         loadGames();
+
+        // Refresh the header again after a short delay to ensure names are loaded
         setTimeout(() => {
-            const p1Name = getPlayerName('p1');
-            const p2Name = getPlayerName('p2');
-            const p1HUD = document.querySelector('.p1-hud h3');
-            const p2HUD = document.querySelector('.p2-hud h3');
-            if (p1HUD) p1HUD.innerText = p1Name + " STATUS";
-            if (p2HUD) p2HUD.innerText = p2Name + " STATUS";
-            const opponent = (myIdentity === 'p1') ? p2Name : p1Name;
-            document.getElementById('turn-indicator').innerText = `DRAFTING FOR ${opponent}`;
-        }, 200);
+            updateDraftHeader();
+        }, 1000);
     });
 
     socket.on('update-draft-status', (players) => {

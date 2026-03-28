@@ -1,60 +1,66 @@
 const API_KEY = "62593b97a74e46aca2f4820ee2548f86";
-let p1Library = [];
-let p2Library = [];
-let masterGameLibrary = [];
+let masterPool = []; // One massive bucket of thousands of famous games
 
 async function loadGames() {
     document.getElementById('main-menu').style.display = 'none';
     document.getElementById('loading-screen').style.display = 'flex';
+    document.getElementById('app').style.display = 'none';
 
     try {
-        // To keep games "Well Known", we only look at the first 10 pages 
-        // of the most popular games in the database.
-        const randomPage1 = Math.floor(Math.random() * 10) + 1;
-        const randomPage2 = Math.floor(Math.random() * 10) + 1;
+        // Fetching 12 random pages from the Top 500 (Potential pool of 20,000+ games)
+        // Platform 7 = Nintendo Switch, 4 = PC, 187 = PS5, 1 = Xbox
+        const pages = Array.from({ length: 12 }, () => Math.floor(Math.random() * 25) + 1);
+        const requests = pages.map(page =>
+            fetch(`https://api.rawg.io/api/games?key=${API_KEY}&page_size=40&page=${page}&ordering=-added&dates=1980-01-01,2026-12-31`)
+                .then(res => res.json())
+        );
 
-        // Fixed URL: added /games? and used &ordering=-added to get famous titles
-        const url1 = `https://api.rawg.io/api/games?key=${API_KEY}&page_size=40&page=${randomPage1}&metacritic=80,100&ordering=-added`;
-        const url2 = `https://api.rawg.io/api/games?key=${API_KEY}&page_size=40&page=${randomPage2}&metacritic=80,100&ordering=-added`;
+        const allResults = await Promise.all(requests);
+        let bigList = allResults.flatMap(data => data.results || []);
 
-        const [response1, response2] = await Promise.all([fetch(url1), fetch(url2)]);
-
-        if (!response1.ok || !response2.ok) throw new Error("API Limit or Error");
-        const data1 = await response1.json();
-        const data2 = await response2.json();
-
-        // 1. Combine all results
-        let combinedResults = [...data1.results, ...data2.results];
-
-        // 2. Remove duplicates
-        masterGameLibrary = combinedResults.filter((game, index, self) =>
+        // --- THE STRICT FAMOUS FILTER ---
+        masterPool = bigList.filter((game, index, self) =>
+            game.background_image !== null &&
+            game.added > 2500 && // ONLY games with 2500+ "Added" (Famous Titles)
             index === self.findIndex((g) => g.id === game.id)
         );
 
-        // 3. Shuffle
-        masterGameLibrary.sort(() => Math.random() - 0.5);
+        // Shuffle the whole bucket
+        masterPool.sort(() => Math.random() - 0.5);
 
-        // 4. DYNAMIC SLICE: Give P1 the first half, P2 the second half
-        const half = Math.floor(masterGameLibrary.length / 2);
-        p1Library = masterGameLibrary.slice(0, half);
-        p2Library = masterGameLibrary.slice(half);
+        console.log(`Master Pool Ready: ${masterPool.length} Famous Titles Loaded.`);
 
-        console.log(`P1 has ${p1Library.length} games, P2 has ${p2Library.length} games`);
+        // Setup Match State
+        gameState.turn = "p1";
+        gameState.player1.rerolls = 2;
+        gameState.player2.rerolls = 2;
 
         document.getElementById('loading-screen').style.display = 'none';
         document.getElementById('app').style.display = 'block';
+        document.getElementById('leave-game-btn').style.display = 'block';
 
-        renderGameLibrary(p1Library);
-
-        // Header fix for Local Mode
-        if (!myRoomData.isOnline) {
-            document.getElementById('turn-indicator').innerText = "PLAYER 1: DRAFT 10 GAMES";
-        }
+        // Directly grab first batch for P1
+        refreshLibraryUI();
+        updateDraftHeader();
 
     } catch (e) {
         console.error(e);
-        showModal("API ERROR", "The game database is currently unavailable. Try again in a moment.");
+        showModal("CONNECTION ERROR", "RAWG is slow. Try again!");
     }
+}
+
+function refreshLibraryUI() {
+    if (masterPool.length < 40) {
+        showModal("POOL EMPTY", "No more games left in the arena!");
+        return;
+    }
+
+    // 1. Grab 40 games from the top of the master pool
+    const displayBatch = masterPool.splice(0, 40);
+
+    // 2. These 40 are now REMOVED from the masterPool. 
+    // Neither player will ever see them again in this match.
+    renderGameLibrary(displayBatch);
 }
 
 const startBtn = document.getElementById('start-game-btn');
