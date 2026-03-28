@@ -4,6 +4,14 @@ let currentVariant = 'random';
 let draftingPool = [];
 let isGuestWaiting = false;
 
+function shuffleArray(array) {
+    for (let i = array.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [array[i], array[j]] = [array[j], array[i]];
+    }
+    return array;
+}
+
 async function loadGames() {
     document.getElementById('main-menu').style.display = 'none';
     document.getElementById('loading-screen').style.display = 'flex';
@@ -36,7 +44,7 @@ async function loadGames() {
             released: game.released || null
         }));
 
-        masterGameLibrary.sort(() => Math.random() - 0.5);
+        shuffleArray(masterGameLibrary);
         draftingPool = [...masterGameLibrary];
 
         // If local, start now. If online, we wait for P2 to ask 
@@ -119,7 +127,8 @@ function refreshLibraryUI() {
     // THE FIX: If the pool gets low, refill it from the master library
     if (draftingPool.length < 40) {
         console.log("Refilling drafting pool from master library...");
-        draftingPool = [...masterGameLibrary].sort(() => Math.random() - 0.5);
+        draftingPool = [...masterGameLibrary];
+        shuffleArray(draftingPool);
     }
 
     // Grab 40 from the drafting pool

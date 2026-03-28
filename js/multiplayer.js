@@ -111,8 +111,13 @@ function connectMultiplayer() {
     socket.on('init-library', (data) => {
         masterGameLibrary = data.library;
         draftingPool = data.pool;
-        // Each client shuffles their own local copy so they get different games!
-        draftingPool.sort(() => Math.random() - 0.5);
+        
+        // Proper Fisher-Yates shuffle for the guest
+        for (let i = draftingPool.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [draftingPool[i], draftingPool[j]] = [draftingPool[j], draftingPool[i]];
+        }
+        
         finalizeGameStart();
     });
 
