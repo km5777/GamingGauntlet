@@ -96,7 +96,8 @@ io.on('connection', (socket) => {
             // Broadcast start signal to everyone
             io.to(data.roomId).emit('init-online-game', {
                 variant: data.variant,
-                phase: data.phase
+                phase: data.phase,
+                limit: data.limit
             });
         }
     });
@@ -133,6 +134,10 @@ io.on('connection', (socket) => {
     // 3. Sync Higher/Lower Turn Swaps
     socket.on('hl-next-round', (data) => {
         io.to(data.roomId).emit('hl-do-next-round');
+    });
+
+    socket.on('br-place-game', (data) => {
+        socket.to(data.roomId).emit('br-opponent-placed', data);
     });
 
     socket.on('kick-player', (data) => {

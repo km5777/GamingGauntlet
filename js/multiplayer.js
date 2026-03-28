@@ -76,7 +76,8 @@ function connectMultiplayer() {
     socket.on('init-online-game', (data) => {
         closeModals();
         currentVariant = data.variant;
-        gameState.phase = data.phase; // higher_lower or drafting
+        gameState.phase = data.phase; // higher_lower, drafting, blind_ranking
+        if (data.limit) draftLimit = data.limit;
 
         document.getElementById('main-menu').style.display = 'none';
         document.getElementById('app').style.display = 'block';
@@ -201,8 +202,23 @@ function connectMultiplayer() {
 
     socket.on('start-duel-phase', () => {
         if (!myRoomData.isOnline) return;
-        gameState.phase = "keep_kill";
-        startKeepKillPhase();
+        if (gameState.phase === 'blind_ranking') {
+            startBlindRankingPhase();
+        } else {
+            gameState.phase = "keep_kill";
+            startKeepKillPhase();
+        }
+    });
+
+    socket.on('br-opponent-placed', (data) => {
+        if (!myRoomData.isOnline || typeof updateBRSlot !== 'function') return;
+        const game = masterGameLibrary.find(g => g.id === data.gameId);
+        if (game) {
+            let ranking = data.role === 'p1' ? brState.p1Ranking : brState.p2Ranking;
+            ranking[data.slotIndex] = game;
+            updateBRSlot(data.role, data.slotIndex, game);
+            if (typeof checkBRFinished === 'function') checkBRFinished();
+        }
     });
 
     socket.on('opponent-revealed', (game) => { if (myRoomData.isOnline) startDecisionTurn(game); });

@@ -72,8 +72,8 @@ function renderGameLibrary(games) {
         card.onclick = () => {
             if (toggleGameSelection(game.id)) {
                 card.classList.toggle('selected');
-                document.getElementById('counter').innerText = `SELECTED: ${currentSelections.length} / 10`;
-                document.getElementById('confirm-btn').disabled = (currentSelections.length !== 10);
+                document.getElementById('counter').innerText = `SELECTED: ${currentSelections.length} / ${draftLimit}`;
+                document.getElementById('confirm-btn').disabled = (currentSelections.length !== draftLimit);
             }
         };
         lib.appendChild(card);
@@ -89,7 +89,7 @@ function startPlayer2Draft() {
     if (lib) lib.innerHTML = '';
 
     updateDraftHeader();
-    document.getElementById('counter').innerText = "SELECTED: 0 / 10";
+    document.getElementById('counter').innerText = `SELECTED: 0 / ${draftLimit}`;
     document.getElementById('confirm-btn').disabled = true;
 
     // Grab a FRESH 40 for Player 2 (if in Random mode)
@@ -333,7 +333,7 @@ function resetGameToMenu() {
 
     // ADDED NULL CHECKS FOR ALL UI UPDATES
     const counter = document.getElementById('counter');
-    if (counter) counter.innerText = "SELECTED: 0 / 10";
+    if (counter) counter.innerText = `SELECTED: 0 / ${draftLimit}`;
 
     const confirmBtn = document.getElementById('confirm-btn');
     if (confirmBtn) {
@@ -343,7 +343,7 @@ function resetGameToMenu() {
     }
 
     const indicator = document.getElementById('turn-indicator');
-    if (indicator) indicator.innerText = "PLAYER 1: DRAFT 10 GAMES";
+    if (indicator) indicator.innerText = `PLAYER 1: DRAFT ${draftLimit} GAMES`;
 
     // Hide gameplay, show menu
     const app = document.getElementById('app');
@@ -360,6 +360,9 @@ function resetGameToMenu() {
 
     const hlPhase = document.getElementById('hl-phase');
     if (hlPhase) hlPhase.style.display = 'none';
+
+    const brPhase = document.getElementById('br-phase');
+    if (brPhase) brPhase.style.display = 'none';
 
     // Reset Higher Lower scores
     hlState.p1Score = 0;
@@ -381,9 +384,12 @@ document.getElementById('open-online-btn').onclick = () => {
 };
 document.getElementById('mode-keep-kill').onclick = () => {
     gameState.phase = "drafting";
+    draftLimit = 10; // Default for keep/kill
     // UI Indicator
     document.getElementById('mode-keep-kill').classList.add('active-mode');
     document.getElementById('mode-higher-lower').classList.remove('active-mode');
+    const brMode = document.getElementById('mode-blind-ranking');
+    if (brMode) brMode.classList.remove('active-mode');
 
     closeModals();
     document.getElementById('modal-variant-selection').style.display = 'flex';
@@ -411,11 +417,48 @@ document.getElementById('mode-higher-lower').onclick = () => {
     // UI Indicator
     document.getElementById('mode-higher-lower').classList.add('active-mode');
     document.getElementById('mode-keep-kill').classList.remove('active-mode');
+    const brMode = document.getElementById('mode-blind-ranking');
+    if (brMode) brMode.classList.remove('active-mode');
 
     closeModals();
     document.getElementById('modal-game-selection').style.display = 'flex';
     document.getElementById('sub-mode-selection').style.display = 'block';
 };
+
+const brModeBtn = document.getElementById('mode-blind-ranking');
+if (brModeBtn) {
+    brModeBtn.onclick = () => {
+        gameState.phase = "blind_ranking";
+        currentVariant = 'search'; // Force search variant for Blind Ranking
+        
+        brModeBtn.classList.add('active-mode');
+        document.getElementById('mode-keep-kill').classList.remove('active-mode');
+        document.getElementById('mode-higher-lower').classList.remove('active-mode');
+        
+        closeModals();
+        document.getElementById('modal-br-limits').style.display = 'flex';
+    };
+}
+
+const brLimit5Btn = document.getElementById('br-limit-5');
+if (brLimit5Btn) {
+    brLimit5Btn.onclick = () => {
+        draftLimit = 5;
+        closeModals();
+        document.getElementById('modal-game-selection').style.display = 'flex';
+        document.getElementById('sub-mode-selection').style.display = 'block';
+    };
+}
+
+const brLimit10Btn = document.getElementById('br-limit-10');
+if (brLimit10Btn) {
+    brLimit10Btn.onclick = () => {
+        draftLimit = 10;
+        closeModals();
+        document.getElementById('modal-game-selection').style.display = 'flex';
+        document.getElementById('sub-mode-selection').style.display = 'block';
+    };
+}
 
 document.getElementById('play-local-btn').onclick = () => {
     myRoomData.isOnline = false;
@@ -434,11 +477,16 @@ document.getElementById('play-online-btn').onclick = () => {
     if (!myRoomData.roomId) return showModal("ERROR", "No Room!");
     if (myRoomData.players.length < 2) return showModal("ERROR", "Wait for P2");
 
+    if (!amILeader) {
+        return showModal("ACCESS DENIED", "Only the Room Leader can start the match!");
+    }
+
     if (amILeader) {
         socket.emit('start-game-request', {
             roomId: myRoomData.roomId,
-            variant: currentVariant, // <--- IMPORTANT: Sends 'search' or 'random'
-            phase: gameState.phase    // <--- IMPORTANT: Sends 'drafting' or 'higher_lower'
+            variant: currentVariant,
+            phase: gameState.phase,
+            limit: draftLimit
         });
     }
 };
@@ -551,7 +599,7 @@ if (rerollBtn) {
             // Clear current selections to prevent picking non-existent cards
             currentSelections = [];
             const counter = document.getElementById('counter');
-            if (counter) counter.innerText = "SELECTED: 0 / 10";
+            if (counter) counter.innerText = `SELECTED: 0 / ${draftLimit}`;
             document.getElementById('confirm-btn').disabled = true;
 
             // Pull a NEW 40 directly from the Master Pool
@@ -574,7 +622,7 @@ function updateDraftHeader() {
     }
 
     if (!myRoomData.isOnline) {
-        indicator.innerText = (gameState.turn === 'p1') ? "PLAYER 1: DRAFT 10 GAMES" : "PLAYER 2: DRAFT 10 GAMES";
+        indicator.innerText = (gameState.turn === 'p1') ? `PLAYER 1: DRAFT ${draftLimit} GAMES` : `PLAYER 2: DRAFT ${draftLimit} GAMES`;
     } else {
         // Online: Each player is drafting simultaneously for the OTHER player
         const targetRole = (myIdentity === 'p1') ? 'p2' : 'p1';
@@ -665,7 +713,7 @@ if (searchInput) {
 function addGameFromSearch(game) {
     if (!masterGameLibrary.find(g => g.id === game.id)) masterGameLibrary.push(game);
     if (currentSelections.includes(game.id)) return showModal("ALREADY PICKED", "Game already in list.");
-    if (currentSelections.length >= 10) return showModal("LIMIT REACHED", "You already have 10 games!");
+    if (currentSelections.length >= draftLimit) return showModal("LIMIT REACHED", `You already have ${draftLimit} games!`);
 
     currentSelections.push(game.id);
     const card = document.createElement('div');
@@ -677,14 +725,14 @@ function addGameFromSearch(game) {
         if (idx > -1) {
             currentSelections.splice(idx, 1);
             card.remove();
-            document.getElementById('counter').innerText = `SELECTED: ${currentSelections.length} / 10`;
-            document.getElementById('confirm-btn').disabled = (currentSelections.length !== 10);
+            document.getElementById('counter').innerText = `SELECTED: ${currentSelections.length} / ${draftLimit}`;
+            document.getElementById('confirm-btn').disabled = (currentSelections.length !== draftLimit);
         }
     };
 
     document.getElementById('game-library').appendChild(card);
-    document.getElementById('counter').innerText = `SELECTED: ${currentSelections.length} / 10`;
-    document.getElementById('confirm-btn').disabled = (currentSelections.length !== 10);
+    document.getElementById('counter').innerText = `SELECTED: ${currentSelections.length} / ${draftLimit}`;
+    document.getElementById('confirm-btn').disabled = (currentSelections.length !== draftLimit);
 }
 
 let isRevealing = false;
@@ -801,4 +849,151 @@ function makeHLGuess(choice) {
     setTimeout(() => {
         proceedHL();
     }, 2000);
+}
+
+// --- BLIND RANKING LOGIC ---
+function startBlindRankingPhase() {
+    document.getElementById('draft-phase').style.display = 'none';
+    document.getElementById('br-phase').style.display = 'block';
+
+    brState.p1Pool = [...gameState.player2.draftedForP1];
+    brState.p2Pool = [...gameState.player1.draftedForP2];
+    brState.p1Ranking = new Array(draftLimit).fill(null);
+    brState.p2Ranking = new Array(draftLimit).fill(null);
+
+    setupBRGrids();
+    if (!myRoomData.isOnline) {
+        gameState.turn = 'p1';
+        drawNextBRGame('p1');
+    } else {
+        drawNextBRGame('p1');
+        drawNextBRGame('p2');
+    }
+}
+
+function setupBRGrids() {
+    ['p1', 'p2'].forEach(p => {
+        const slotsContainer = document.getElementById(`br-${p}-slots`);
+        slotsContainer.innerHTML = '';
+        for (let i = 0; i < draftLimit; i++) {
+            const slot = document.createElement('div');
+            slot.className = 'br-slot';
+            slot.id = `br-${p}-slot-${i}`;
+            slot.innerHTML = `<div class="br-slot-num">${i + 1}</div><div class="br-slot-content"></div>`;
+            
+            slot.onclick = () => {
+                if (myRoomData.isOnline && myIdentity !== p) return;
+                if (!myRoomData.isOnline && gameState.turn !== p) return;
+                tryPlaceBRGame(p, i);
+            };
+
+            slotsContainer.appendChild(slot);
+        }
+    });
+
+    document.getElementById('br-p1-title').innerText = getPlayerName('p1') + ' RANKING';
+    document.getElementById('br-p2-title').innerText = getPlayerName('p2') + ' RANKING';
+}
+
+function drawNextBRGame(role) {
+    let pool = role === 'p1' ? brState.p1Pool : brState.p2Pool;
+    if (pool.length === 0) {
+        if (role === 'p1') brState.p1CurrentGame = null;
+        else brState.p2CurrentGame = null;
+        
+        if (!myRoomData.isOnline) {
+            if (role === 'p1' && gameState.turn === 'p1') {
+                gameState.turn = 'p2';
+                showModal("TURN SWAP", "Player 1 is done! Pass the device to Player 2.");
+                drawNextBRGame('p2');
+                return;
+            }
+        }
+        
+        checkBRFinished();
+        return;
+    }
+    
+    const idx = Math.floor(Math.random() * pool.length);
+    const gameId = pool.splice(idx, 1)[0];
+    const gameInfo = masterGameLibrary.find(g => g.id === gameId);
+    
+    if (role === 'p1') brState.p1CurrentGame = gameInfo;
+    else brState.p2CurrentGame = gameInfo;
+
+    renderBRActiveGame();
+}
+
+function renderBRActiveGame() {
+    let activeRole = null;
+    if (myRoomData.isOnline) {
+        activeRole = myIdentity;
+    } else {
+        activeRole = gameState.turn;
+    }
+
+    const game = activeRole === 'p1' ? brState.p1CurrentGame : brState.p2CurrentGame;
+    
+    const status = document.getElementById('br-current-status');
+    const cardImg = document.getElementById('br-active-img');
+    const cardName = document.getElementById('br-active-name');
+    const activeReveal = document.getElementById('br-active-reveal');
+
+    if (!game) {
+        status.innerText = "WAITING FOR OPPONENT...";
+        cardImg.src = '';
+        cardName.innerText = '';
+        activeReveal.style.opacity = '0.5';
+    } else {
+        status.innerText = myRoomData.isOnline ? "YOUR NEXT GAME TO RANK:" : `${getPlayerName(activeRole).toUpperCase()}, RANK THIS GAME:`;
+        cardImg.src = game.background_image || '';
+        cardName.innerText = game.name;
+        activeReveal.style.opacity = '1';
+    }
+}
+
+function tryPlaceBRGame(role, slotIndex) {
+    const game = role === 'p1' ? brState.p1CurrentGame : brState.p2CurrentGame;
+    if (!game) return;
+
+    let ranking = role === 'p1' ? brState.p1Ranking : brState.p2Ranking;
+    if (ranking[slotIndex] !== null) return; 
+
+    ranking[slotIndex] = game;
+    updateBRSlot(role, slotIndex, game);
+
+    if (myRoomData.isOnline) {
+        socket.emit('br-place-game', {
+            roomId: myRoomData.roomId,
+            role: role,
+            slotIndex: slotIndex,
+            gameId: game.id
+        });
+        drawNextBRGame(role);
+    } else {
+        drawNextBRGame(role);
+    }
+}
+
+function updateBRSlot(role, slotIndex, game) {
+    const slotEl = document.getElementById(`br-${role}-slot-${slotIndex}`);
+    if (slotEl) {
+        slotEl.querySelector('.br-slot-content').innerHTML = `
+            <img src="${game.background_image || ''}" style="height: 50px; width: auto; max-width: 80px; object-fit: cover; border-radius: 4px;">
+            <span style="font-size: 14px; font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding-left: 10px; width: 100%; color:var(--text-main);">${game.name}</span>
+        `;
+        slotEl.style.border = role === 'p1' ? '2px solid var(--neon-p1)' : '2px solid var(--neon-p2)';
+        slotEl.style.boxShadow = role === 'p1' ? '0 0 10px rgba(0, 240, 255, 0.5)' : '0 0 10px rgba(255, 0, 255, 0.5)';
+        slotEl.style.cursor = 'default';
+    }
+}
+
+function checkBRFinished() {
+    const p1Done = brState.p1Ranking.every(slot => slot !== null);
+    const p2Done = brState.p2Ranking.every(slot => slot !== null);
+    
+    if (p1Done && p2Done) {
+        document.getElementById('br-current-status').innerText = "RANKING COMPLETE!";
+        document.getElementById('br-active-reveal').innerHTML = '<h2 style="color:var(--neon-p1); font-family:var(--font-head); font-size: 32px; text-align:center; margin-top: 50px; text-shadow: 0 0 15px var(--neon-p1);">ALL DONE!</h2><button class="glow-btn pink" onclick="resetGameToMenu()" style="margin-top:20px;">BACK TO MENU</button>';
+    }
 }

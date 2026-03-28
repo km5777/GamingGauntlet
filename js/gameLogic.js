@@ -1,8 +1,8 @@
 let gameState = {
     phase: "drafting",
     turn: "p1",
-    player1: { draftedForP2: [], keeps: [], kills: [], rerolls: 2 },
-    player2: { draftedForP1: [], keeps: [], kills: [], rerolls: 2 }
+    player1: { draftedForP2: [], draftedForP1: [], keeps: [], kills: [], rerolls: 2 },
+    player2: { draftedForP1: [], draftedForP2: [], keeps: [], kills: [], rerolls: 2 }
 };
 
 let hlState = {
@@ -11,17 +11,25 @@ let hlState = {
     roundCount: 0
 };
 
+let brState = {
+    p1Pool: [], p2Pool: [],
+    p1Ranking: [], p2Ranking: [],
+    p1CurrentGame: null, p2CurrentGame: null
+};
+
+let draftLimit = 10;
 let currentSelections = [];
+
 function toggleGameSelection(gameId) {
     const index = currentSelections.indexOf(gameId);
     if (index > -1) {
         currentSelections.splice(index, 1);
         return true;
-    } else if (currentSelections.length < 10) {
+    } else if (currentSelections.length < draftLimit) {
         currentSelections.push(gameId);
         return true;
     }
-    showModal("LIMIT REACHED", "You already picked 10!");
+    showModal("LIMIT REACHED", `You already picked ${draftLimit}!`);
     return false;
 }
 
@@ -90,7 +98,11 @@ function handleConfirm() {
             startPlayer2Draft();
         } else {
             gameState.player2.draftedForP1 = [...currentSelections];
-            startKeepKillPhase();
+            if (gameState.phase === 'blind_ranking') {
+                startBlindRankingPhase();
+            } else {
+                startKeepKillPhase();
+            }
         }
     }
 }
