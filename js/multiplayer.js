@@ -25,6 +25,13 @@ let phaseTransitionLock = false;
  */
 let hasReceivedStartDuel = false;
 
+/**
+ * matchAbortTimer — grace period before treating a disconnect as a real leave.
+ * Render.com free tier drops sockets briefly. We wait 3 seconds before aborting.
+ */
+let matchAbortTimer = null;
+
+
 const SERVER_URL = "https://gaminggauntlet.onrender.com";
 
 // ─── CONNECTION BANNER ───────────────────────────────────────────────────────
@@ -143,14 +150,32 @@ function connectMultiplayer() {
 
         renderLobby(data.roomId, data.players);
 
-        // Handle mid-game abandonment: if a player leaves during a game
         const appDiv = document.getElementById('app');
-        if (appDiv && appDiv.style.display === 'block' && data.players.length < 2) {
-            if (typeof countdown !== 'undefined') clearInterval(countdown);
-            if (typeof showModal === 'function') showModal('MATCH ABORTED', 'The opponent has left the match.');
-            resetGameToMenu();
+        const gameIsActive = appDiv && appDiv.style.display === 'block';
+
+        if (gameIsActive && data.players.length < 2) {
+            // BUG FIX: Don't immediately abort — Render.com can drop sockets
+            // for <1s (e.g. at round 20 of H/L). Give a 3-second grace period.
+            // If the player reconnects, room-updated fires again with 2 players
+            // and we cancel the timer.
+            if (!matchAbortTimer) {
+                matchAbortTimer = setTimeout(() => {
+                    matchAbortTimer = null;
+                    // Confirm they're still gone before aborting
+                    if (myRoomData.players.length < 2 && gameHasStarted) {
+                        if (typeof countdown !== 'undefined') clearInterval(countdown);
+                        if (typeof showModal === 'function') showModal('MATCH ABORTED', 'The opponent has disconnected.');
+                        resetGameToMenu();
+                    }
+                }, 3000);
+            }
+        } else if (data.players.length >= 2 && matchAbortTimer) {
+            // Player came back within grace period — cancel the abort
+            clearTimeout(matchAbortTimer);
+            matchAbortTimer = null;
         }
     });
+
 
     socket.on('kicked', () => {
         resetLocalRoomState();
@@ -205,6 +230,12 @@ function connectMultiplayer() {
     });
 
     socket.on('init-library', (data) => {
+        // CRITICAL: Do NOT overwrite the library once the game has started.
+        // The guest's 3-second retry loop can re-trigger sync-library mid-draft,
+        // which would wipe out any search-added games — making them unfindable
+        // in showRevealPicker and causing only 2-5 cards to appear instead of 10.
+        if (gameHasStarted) return;
+
         masterGameLibrary = data.library;
         draftingPool = data.pool;
         if (data.ccCategory) ccState.category = data.ccCategory;
@@ -222,6 +253,7 @@ function connectMultiplayer() {
 
         finalizeGameStart();
     });
+
 
     // ── Higher/Lower sync ──────────────────────────────────────────────────
 

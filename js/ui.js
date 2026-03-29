@@ -404,7 +404,9 @@ function resetGameToMenu() {
     if (typeof gameHasStarted        !== 'undefined') gameHasStarted        = false;
     if (typeof phaseTransitionLock   !== 'undefined') phaseTransitionLock   = false;
     if (typeof hasReceivedStartDuel  !== 'undefined') hasReceivedStartDuel  = false;
+    if (typeof matchAbortTimer       !== 'undefined' && matchAbortTimer) { clearTimeout(matchAbortTimer); matchAbortTimer = null; }
     if (guestSyncRetryInterval) { clearInterval(guestSyncRetryInterval); guestSyncRetryInterval = null; }
+
 
     gameState.phase = "drafting";
     gameState.turn = "p1";

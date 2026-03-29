@@ -115,21 +115,43 @@ window.SFX = {
 };
 
 // Global Automatic Sound Hooks for Clicks & Hovers
+// BUG FIX: mouseover fires for every child element inside a target (e.g. span text
+// inside a button). Track the last hovered element — if the same one fires again
+// within 200ms, skip it. This prevents the hover sound from playing 2-3x per hover.
+let _lastHoverTarget = null;
+let _lastHoverTime   = 0;
+
 document.addEventListener('mouseover', (e) => {
     if (!audioInitialized) return;
-    // Buttons
-    if (e.target.tagName === 'BUTTON' || e.target.closest('.glow-btn') || e.target.closest('button')) {
-        SFX.hover();
-    } 
-    // Cards
-    else if (e.target.closest('.game-card') || e.target.classList.contains('reveal-choice-card') || e.target.classList.contains('pool-card')) {
-        SFX.cardHover();
-    }
+
+    // Find the meaningful hover target (the outermost interactive element)
+    const btn  = e.target.matches('button, .glow-btn, .cyber-btn, .hl-btn, .choice-btn, .kick-btn')
+                    ? e.target
+                    : e.target.closest('button, .glow-btn, .cyber-btn, .hl-btn, .choice-btn, .kick-btn');
+    const card = !btn && (
+                    e.target.closest('.game-card') ||
+                    e.target.closest('.reveal-choice-card') ||
+                    e.target.closest('.pool-card') ||
+                    e.target.closest('.mode-card')
+                 );
+
+    const hoverTarget = btn || card;
+    if (!hoverTarget) return;
+
+    const now = Date.now();
+    // Debounce: same element within 200ms = duplicate mouseover from child, skip
+    if (hoverTarget === _lastHoverTarget && now - _lastHoverTime < 200) return;
+    _lastHoverTarget = hoverTarget;
+    _lastHoverTime   = now;
+
+    if (btn)  SFX.hover();
+    else      SFX.cardHover();
 });
 
 document.addEventListener('mousedown', (e) => {
     if (!audioInitialized) return;
-    if (e.target.tagName === 'BUTTON' || e.target.closest('.glow-btn') || e.target.closest('button') || e.target.closest('.game-card') || e.target.classList.contains('reveal-choice-card') || e.target.classList.contains('pool-card')) {
-        SFX.click();
-    }
+    const isInteractive = e.target.closest('button, .glow-btn, .cyber-btn, .hl-btn, .choice-btn') ||
+                          e.target.closest('.game-card, .reveal-choice-card, .pool-card');
+    if (isInteractive) SFX.click();
 });
+
