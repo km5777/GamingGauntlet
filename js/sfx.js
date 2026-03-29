@@ -115,19 +115,15 @@ window.SFX = {
 };
 
 // Global Automatic Sound Hooks for Clicks & Hovers
-// BUG FIX: mouseover fires for every child element inside a target (e.g. span text
-// inside a button). Track the last hovered element — if the same one fires again
-// within 200ms, skip it. This prevents the hover sound from playing 2-3x per hover.
+// Sound plays exactly ONCE when the cursor enters an interactive element.
+// Reset only when the cursor fully leaves that element (mouseout).
 let _lastHoverTarget = null;
-let _lastHoverTime   = 0;
 
 document.addEventListener('mouseover', (e) => {
     if (!audioInitialized) return;
 
-    // Find the meaningful hover target (the outermost interactive element)
-    const btn  = e.target.matches('button, .glow-btn, .cyber-btn, .hl-btn, .choice-btn, .kick-btn')
-                    ? e.target
-                    : e.target.closest('button, .glow-btn, .cyber-btn, .hl-btn, .choice-btn, .kick-btn');
+    // Find the outermost interactive element the cursor is inside
+    const btn  = e.target.closest('button, .glow-btn, .cyber-btn, .hl-btn, .choice-btn, .kick-btn');
     const card = !btn && (
                     e.target.closest('.game-card') ||
                     e.target.closest('.reveal-choice-card') ||
@@ -138,14 +134,23 @@ document.addEventListener('mouseover', (e) => {
     const hoverTarget = btn || card;
     if (!hoverTarget) return;
 
-    const now = Date.now();
-    // Debounce: same element within 200ms = duplicate mouseover from child, skip
-    if (hoverTarget === _lastHoverTarget && now - _lastHoverTime < 200) return;
+    // Same element as last time — cursor is still inside it, skip
+    if (hoverTarget === _lastHoverTarget) return;
     _lastHoverTarget = hoverTarget;
-    _lastHoverTime   = now;
 
     if (btn)  SFX.hover();
     else      SFX.cardHover();
+});
+
+// Clear the tracker when the cursor leaves an interactive element
+document.addEventListener('mouseout', (e) => {
+    if (!_lastHoverTarget) return;
+    const leaving = e.target.closest('button, .glow-btn, .cyber-btn, .hl-btn, .choice-btn, .kick-btn') ||
+                    e.target.closest('.game-card, .reveal-choice-card, .pool-card, .mode-card');
+    // Only reset if relatedTarget (where cursor went) is NOT inside the same element
+    if (leaving && leaving === _lastHoverTarget && !_lastHoverTarget.contains(e.relatedTarget)) {
+        _lastHoverTarget = null;
+    }
 });
 
 document.addEventListener('mousedown', (e) => {

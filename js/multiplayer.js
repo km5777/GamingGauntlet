@@ -153,28 +153,16 @@ function connectMultiplayer() {
         const appDiv = document.getElementById('app');
         const gameIsActive = appDiv && appDiv.style.display === 'block';
 
+        // If a player leaves during an active game, abort immediately.
+        // (Server already removes them from the room on disconnect,
+        //  so there is no reconnection window to wait for.)
         if (gameIsActive && data.players.length < 2) {
-            // BUG FIX: Don't immediately abort — Render.com can drop sockets
-            // for <1s (e.g. at round 20 of H/L). Give a 3-second grace period.
-            // If the player reconnects, room-updated fires again with 2 players
-            // and we cancel the timer.
-            if (!matchAbortTimer) {
-                matchAbortTimer = setTimeout(() => {
-                    matchAbortTimer = null;
-                    // Confirm they're still gone before aborting
-                    if (myRoomData.players.length < 2 && gameHasStarted) {
-                        if (typeof countdown !== 'undefined') clearInterval(countdown);
-                        if (typeof showModal === 'function') showModal('MATCH ABORTED', 'The opponent has disconnected.');
-                        resetGameToMenu();
-                    }
-                }, 3000);
-            }
-        } else if (data.players.length >= 2 && matchAbortTimer) {
-            // Player came back within grace period — cancel the abort
-            clearTimeout(matchAbortTimer);
-            matchAbortTimer = null;
+            if (typeof countdown !== 'undefined') clearInterval(countdown);
+            if (typeof showModal === 'function') showModal('MATCH ABORTED', 'The opponent has left the match.');
+            resetGameToMenu();
         }
     });
+
 
 
     socket.on('kicked', () => {
