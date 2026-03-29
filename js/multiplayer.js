@@ -196,6 +196,11 @@ function connectMultiplayer() {
             return;
         }
 
+        if (data.isPP) {
+            if (typeof handlePPDecisionSync === 'function') handlePPDecisionSync(data);
+            return;
+        }
+
         hlState.p1Score = data.score1;
         hlState.p2Score = data.score2;
 
@@ -274,6 +279,8 @@ function connectMultiplayer() {
             startKeepCutUpgradePhase();
         } else if (gameState.phase === 'oup') {
             startOUPPhase();
+        } else if (gameState.phase === 'price_paradox') {
+            startPriceParadoxPhase();
         } else {
             gameState.phase = "keep_kill";
             startKeepKillPhase();

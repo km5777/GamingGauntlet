@@ -23,6 +23,12 @@ let ccState = {
     revealIndex: 4 // 4 to 0 (Rank 5 to Rank 1)
 };
 
+let ppState = {
+    p1Choices: [], 
+    p2Choices: [],
+    roundIndex: 0
+};
+
 let draftLimit = 10;
 let currentSelections = [];
 
@@ -117,6 +123,8 @@ function handleConfirm() {
                 startKeepCutUpgradePhase();
             } else if (gameState.phase === 'oup') {
                 startOUPPhase();
+            } else if (gameState.phase === 'price_paradox') {
+                startPriceParadoxPhase();
             } else {
                 startKeepKillPhase();
             }

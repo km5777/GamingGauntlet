@@ -412,6 +412,9 @@ function resetGameToMenu() {
     const oupPhase = document.getElementById('oup-phase');
     if (oupPhase) oupPhase.style.display = 'none';
 
+    const ppPhase = document.getElementById('pp-phase');
+    if (ppPhase) ppPhase.style.display = 'none';
+
     // Reset Higher Lower scores
     hlState.p1Score = 0;
     hlState.p2Score = 0;
@@ -537,6 +540,20 @@ if (oupModeBtn) {
         draftLimit = 5; // EXACTLY 5 games
         
         setActiveMode('mode-oup');
+        
+        document.getElementById('sub-mode-selection').style.display = 'block';
+    };
+}
+
+const ppModeBtn = document.getElementById('mode-price-paradox');
+if (ppModeBtn) {
+    ppModeBtn.onclick = () => {
+        if (window.SFX) SFX.openUI();
+        gameState.phase = "price_paradox";
+        currentVariant = 'search'; 
+        draftLimit = 3; 
+        
+        setActiveMode('mode-price-paradox');
         
         document.getElementById('sub-mode-selection').style.display = 'block';
     };
@@ -1823,3 +1840,231 @@ function showOUPSummary() {
     endRow.appendChild(mainBtn);
     summaryDiv.appendChild(endRow);
 }
+
+// --- PRICE PARADOX (Buy, Wait for Sale, Skip) LOGIC ---
+let ppState_ui = {
+    turnIndex: 0, 
+    p1Judgments: [],
+    p2Judgments: []
+};
+
+function startPriceParadoxPhase() {
+    console.log("Starting Price Paradox Phase...");
+    document.getElementById("draft-phase").style.display = "none";
+    const ppPhase = document.getElementById("pp-phase");
+    if (ppPhase) ppPhase.style.display = "flex";
+
+    ppState_ui = {
+        turnIndex: 0,
+        p1Judgments: [],
+        p2Judgments: []
+    };
+    renderPPBoard();
+}
+
+function renderPPBoard() {
+    if (ppState_ui.turnIndex >= 6) { // 3 games each = 6 turns total
+        showPPSummary();
+        return;
+    }
+
+    const isP1Turn = (ppState_ui.turnIndex % 2 === 0);
+    const activeJudge = isP1Turn ? "p1" : "p2";
+    
+    const internalListIndex = Math.floor(ppState_ui.turnIndex / 2);
+    
+    const listToJudge = isP1Turn ? gameState.player2.draftedForP1 : gameState.player1.draftedForP2;
+    const activeGameId = listToJudge[internalListIndex];
+    const game = masterGameLibrary.find(g => Number(g.id) === Number(activeGameId));
+
+    if (!game) {
+        ppState_ui.turnIndex++;
+        renderPPBoard();
+        return;
+    }
+
+    const titleEl = document.getElementById("pp-title");
+    const subtEl = document.getElementById("pp-subtitle");
+    
+    if (myRoomData.isOnline) {
+        if (myIdentity === activeJudge) {
+            titleEl.innerText = "VALUATION TIME";
+            subtEl.innerText = "Is this game worth its full price?";
+            titleEl.style.color = (myIdentity === "p1") ? "var(--neon-p1)" : "var(--neon-p2)";
+        } else {
+            const partnerName = getPlayerName(activeJudge);
+            titleEl.innerText = `WAITING FOR ${partnerName.toUpperCase()}`;
+            subtEl.innerText = "They are considering the price tag...";
+            titleEl.style.color = (activeJudge === "p1") ? "var(--neon-p1)" : "var(--neon-p2)";
+        }
+    } else {
+        titleEl.innerText = `PLAYER ${isP1Turn ? "1" : "2"}: YOUR DECISION`;
+        subtEl.innerText = "Would you buy, wait, or skip?";
+        titleEl.style.color = isP1Turn ? "var(--neon-p1)" : "var(--neon-p2)";
+    }
+
+    document.getElementById("pp-active-img").src = game.background_image || "";
+    document.getElementById("pp-active-name").innerText = game.name;
+    document.getElementById("pp-stamp-container").style.display = "none"; 
+    
+    const activeCard = document.getElementById("pp-active-card");
+    activeCard.style.border = `2px solid ${isP1Turn ? "var(--neon-p1)" : "var(--neon-p2)"}`;
+    activeCard.style.boxShadow = `0 0 15px ${isP1Turn ? "var(--neon-p1)" : "var(--neon-p2)"}`;
+
+    const btnB = document.getElementById("pp-btn-buy");
+    const btnS = document.getElementById("pp-btn-sale");
+    const btnK = document.getElementById("pp-btn-skip");
+
+    let isMyTurn = !myRoomData.isOnline || myIdentity === activeJudge;
+
+    [btnB, btnS, btnK].forEach(btn => {
+        btn.style.opacity = isMyTurn ? "1" : "0.5";
+        btn.style.cursor = isMyTurn ? "pointer" : "not-allowed";
+        const newBtn = btn.cloneNode(true);
+        btn.parentNode.replaceChild(newBtn, btn);
+    });
+
+    if (isMyTurn) {
+        document.getElementById("pp-btn-buy").onclick = () => assignPPFate("buy");
+        document.getElementById("pp-btn-sale").onclick = () => assignPPFate("sale");
+        document.getElementById("pp-btn-skip").onclick = () => assignPPFate("skip");
+    }
+}
+
+function assignPPFate(fate) {
+    if (window.SFX) SFX.click();
+    
+    if (myRoomData.isOnline) {
+        if (socket) {
+            socket.emit("hl-guess-sync", {
+                roomId: myRoomData.roomId,
+                isPP: true,
+                actor: myIdentity,
+                decision: fate,
+                index: ppState_ui.turnIndex
+            });
+        }
+    } else {
+        handlePPDecisionSync({ actor: (ppState_ui.turnIndex % 2 === 0 ? "p1" : "p2"), decision: fate, index: ppState_ui.turnIndex });
+    }
+}
+
+function handlePPDecisionSync(data) {
+    if (window.SFX && data.actor !== myIdentity) SFX.correct();
+
+    const stampContainer = document.getElementById("pp-stamp-container");
+    stampContainer.style.display = "flex";
+    const stamp = document.getElementById("pp-stamp");
+    
+    if (data.decision === "buy") {
+        stamp.innerText = "BUY IT";
+        stamp.style.border = "4px solid #00ff64";
+        stamp.style.color = "#00ff64";
+    } else if (data.decision === "sale") {
+        stamp.innerText = "WAIT FOR SALE";
+        stamp.style.border = "4px solid #ffd700";
+        stamp.style.color = "#ffd700";
+    } else {
+        stamp.innerText = "SKIP IT";
+        stamp.style.border = "4px solid #ff0050";
+        stamp.style.color = "#ff0050";
+    }
+    
+    stamp.style.animation = "none";
+    void stamp.offsetWidth; 
+    stamp.style.animation = "pop-in 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards";
+
+    const isP1Turn = (data.index % 2 === 0);
+    if (isP1Turn) {
+        ppState_ui.p1Judgments.push(data.decision);
+    } else {
+        ppState_ui.p2Judgments.push(data.decision);
+    }
+
+    setTimeout(() => {
+        ppState_ui.turnIndex++;
+        renderPPBoard();
+    }, 2500);
+}
+
+function showPPSummary() {
+    const titleEl = document.getElementById("pp-title");
+    const subtEl = document.getElementById("pp-subtitle");
+    titleEl.innerText = "MARKET WRAP-UP";
+    subtEl.innerText = "The final spending habits revealed";
+    titleEl.style.color = "var(--text-main)";
+
+    document.getElementById("pp-active-card").style.display = "none";
+    document.getElementById("pp-controls").style.display = "none";
+
+    const container = document.querySelector("#pp-phase .centered-grid");
+    
+    let summaryDiv = document.getElementById("pp-summary-div");
+    if(!summaryDiv) {
+        summaryDiv = document.createElement("div");
+        summaryDiv.id = "pp-summary-div";
+        summaryDiv.style.width = "100%";
+        container.appendChild(summaryDiv);
+    }
+    summaryDiv.style.display = "block";
+
+    const p1Name = getPlayerName("p1");
+    const p2Name = getPlayerName("p2");
+
+    summaryDiv.innerHTML = `<div style="display:flex; flex-direction:column; gap: 40px; width: 100%;">
+        <div style="display:flex; flex-direction:column; align-items:center;">
+             <h3 class="neon-text" style="color:var(--neon-p1); margin-bottom:15px; text-transform:uppercase;">${p1Name}'S DECISIONS</h3>
+             <div id="pp-p1-grid" style="display:flex; gap:15px; flex-wrap:wrap; justify-content:center;"></div>
+        </div>
+        <div style="display:flex; flex-direction:column; align-items:center;">
+             <h3 class="neon-text" style="color:var(--neon-p2); margin-bottom:15px; text-transform:uppercase;">${p2Name}'S DECISIONS</h3>
+             <div id="pp-p2-grid" style="display:flex; gap:15px; flex-wrap:wrap; justify-content:center;"></div>
+        </div>
+    </div>`;
+
+    const drawGrid = (judgments, list, gridId) => {
+        const grid = document.getElementById(gridId);
+        list.forEach((gameId, i) => {
+            const game = masterGameLibrary.find(g => Number(g.id) === Number(gameId));
+            if(!game) return;
+            const decision = judgments[i];
+            let badgeColor = "var(--text-dim)";
+            let decisionTxt = "---";
+            if(decision === "buy") { badgeColor = "#00ff64"; decisionTxt = "BUY IT"; }
+            if(decision === "sale") { badgeColor = "#ffd700"; decisionTxt = "WAIT FOR SALE"; }
+            if(decision === "skip") { badgeColor = "#ff0050"; decisionTxt = "SKIP IT"; }
+            
+            grid.innerHTML += `
+               <div class="game-card" style="width:140px; height:200px; flex-direction:column; border: 2px solid ${badgeColor}; cursor:default;">
+                   <img src="${game.background_image || ""}" style="width:100%; height:80px; object-fit:cover; border-radius:5px 5px 0 0;">
+                   <h3 style="padding:5px; font-size:11px; text-align:center;">${game.name}</h3>
+                   <div style="flex:1;"></div>
+                   <div style="width:100%; padding: 5px; text-align:center; font-weight:bold; background:${badgeColor}; color:white; font-size:10px;">${decisionTxt}</div>
+               </div>
+            `;
+        });
+    };
+
+    drawGrid(ppState_ui.p1Judgments, gameState.player2.draftedForP1, "pp-p1-grid");
+    drawGrid(ppState_ui.p2Judgments, gameState.player1.draftedForP2, "pp-p2-grid");
+
+    const endRow = document.createElement("div");
+    endRow.style.width = "100%";
+    endRow.style.display = "flex";
+    endRow.style.justifyContent = "center";
+    endRow.style.marginTop = "30px";
+    const mainBtn = document.createElement("button");
+    mainBtn.className = "glow-btn pink";
+    mainBtn.innerText = "MAIN MENU";
+    mainBtn.onclick = () => {
+        if(window.SFX) SFX.click();
+        resetGameToMenu();
+        document.getElementById("pp-active-card").style.display = "flex";
+        document.getElementById("pp-controls").style.display = "flex";
+        const sumDiv = document.getElementById("pp-summary-div");
+        if(sumDiv) sumDiv.style.display = "none";
+    };
+    endRow.appendChild(mainBtn);
+    summaryDiv.appendChild(endRow);
+}
+
