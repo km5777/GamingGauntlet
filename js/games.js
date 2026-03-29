@@ -32,10 +32,26 @@ async function loadGames() {
                     if (!res.ok) return { results: [] };
                     return res.json().catch(() => ({ results: [] }));
                 })
+                .catch(err => ({ results: [] })) // Prevent fetch network errors from crashing Promises
         );
 
         const allResults = await Promise.all(requests);
         let bigList = allResults.flatMap(data => data.results || []);
+        
+        if (bigList.length === 0) {
+            bigList = [
+                { id: 1, name: "RAWG Error: Fallback 1", background_image: "", added: 3000, released: "2024-01-01" },
+                { id: 2, name: "RAWG Error: Fallback 2", background_image: "", added: 3000, released: "2024-01-01" },
+                { id: 3, name: "RAWG Error: Fallback 3", background_image: "", added: 3000, released: "2024-01-01" },
+                { id: 4, name: "RAWG Error: Fallback 4", background_image: "", added: 3000, released: "2024-01-01" },
+                { id: 5, name: "RAWG Error: Fallback 5", background_image: "", added: 3000, released: "2024-01-01" },
+                { id: 6, name: "RAWG Error: Fallback 6", background_image: "", added: 3000, released: "2024-01-01" },
+                { id: 7, name: "RAWG Error: Fallback 7", background_image: "", added: 3000, released: "2024-01-01" },
+                { id: 8, name: "RAWG Error: Fallback 8", background_image: "", added: 3000, released: "2024-01-01" },
+                { id: 9, name: "RAWG Error: Fallback 9", background_image: "", added: 3000, released: "2024-01-01" },
+                { id: 10, name: "RAWG Error: Fallback 10", background_image: "", added: 3000, released: "2024-01-01" }
+            ];
+        }
 
         masterGameLibrary = bigList.filter((game, index, self) =>
             game.background_image !== null && game.added > 2500 &&

@@ -432,6 +432,8 @@ document.getElementById('mode-keep-kill').onclick = () => {
     document.getElementById('mode-higher-lower').classList.remove('active-mode');
     const brMode = document.getElementById('mode-blind-ranking');
     if (brMode) brMode.classList.remove('active-mode');
+    const ccMode = document.getElementById('mode-category-clash');
+    if (ccMode) ccMode.classList.remove('active-mode');
 
     document.getElementById('modal-game-selection').style.display = 'none';
     document.getElementById('modal-variant-selection').style.display = 'flex';
@@ -466,6 +468,8 @@ document.getElementById('mode-higher-lower').onclick = () => {
     document.getElementById('mode-keep-kill').classList.remove('active-mode');
     const brMode = document.getElementById('mode-blind-ranking');
     if (brMode) brMode.classList.remove('active-mode');
+    const ccMode = document.getElementById('mode-category-clash');
+    if (ccMode) ccMode.classList.remove('active-mode');
 
     // Higher lower doesn't need to ask for search vs random or limits, it just unlocks play buttons
     document.getElementById('sub-mode-selection').style.display = 'block';
