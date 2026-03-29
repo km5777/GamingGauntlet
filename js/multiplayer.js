@@ -1,9 +1,10 @@
-// --- MULTIPLAYER CORE ---
+// ─── MULTIPLAYER CORE ────────────────────────────────────────────────────────
+
 let socket = null;
 let myIdentity = null;
 let amILeader = false;
 
-// This object tracks if we are actually in a room or playing locally
+// Tracks whether we are in an active room / online game
 let myRoomData = {
     roomId: null,
     playerName: null,
@@ -11,8 +12,60 @@ let myRoomData = {
     players: []
 };
 
-// Change to your actual server deployment URL
+/**
+ * phaseTransitionLock: Prevents double-fire of phase-starting events.
+ * Render.com's free tier can reconnect mid-game and retransmit buffered
+ * socket events, causing start-duel-phase to fire twice and wiping state.
+ */
+let phaseTransitionLock = false;
+
+/**
+ * hasReceivedStartDuel: One-shot guard — once start-duel-phase fires,
+ * ignore any duplicate. Reset when a new game starts.
+ */
+let hasReceivedStartDuel = false;
+
 const SERVER_URL = "https://gaminggauntlet.onrender.com";
+
+// ─── CONNECTION BANNER ───────────────────────────────────────────────────────
+
+/**
+ * Shows a slim, non-blocking banner at the top of the screen.
+ * Auto-dismisses after 4 seconds.
+ * @param {string} message
+ * @param {'warning'|'error'|'success'} type
+ */
+function showConnectionBanner(message, type) {
+    let banner = document.getElementById('connection-banner');
+    if (!banner) {
+        banner = document.createElement('div');
+        banner.id = 'connection-banner';
+        banner.style.cssText = [
+            'position:fixed', 'top:0', 'left:0', 'right:0', 'z-index:9999',
+            'padding:10px 20px', 'text-align:center',
+            'font-family:var(--font-head,monospace)', 'font-size:13px',
+            'font-weight:700', 'letter-spacing:1px', 'text-transform:uppercase',
+            'transition:opacity 0.5s ease', 'opacity:0'
+        ].join(';');
+        document.body.appendChild(banner);
+    }
+
+    const palette = {
+        warning: { bg: '#b8860b', text: '#fff' },
+        error:   { bg: '#8b0000', text: '#fff' },
+        success: { bg: '#1a5c2a', text: '#afffbe' }
+    };
+    const c = palette[type] || palette.warning;
+    banner.style.backgroundColor = c.bg;
+    banner.style.color = c.text;
+    banner.innerText = message;
+    banner.style.opacity = '1';
+
+    clearTimeout(banner._hideTimer);
+    banner._hideTimer = setTimeout(() => { banner.style.opacity = '0'; }, 4000);
+}
+
+// ─── CONNECT ─────────────────────────────────────────────────────────────────
 
 function connectMultiplayer() {
     if (socket && socket.connected) return;
@@ -20,9 +73,38 @@ function connectMultiplayer() {
     socket = io(SERVER_URL, {
         transports: ['polling', 'websocket'],
         upgrade: true
-    })
+    });
 
-    // When YOU create a room
+    // ── Connection lifecycle ───────────────────────────────────────────────
+
+    socket.on('disconnect', (reason) => {
+        // Only warn during active gameplay — lobby drops are less alarming
+        if (myRoomData.isOnline) {
+            showConnectionBanner('CONNECTION LOST — RECONNECTING...', 'warning');
+        }
+    });
+
+    socket.on('reconnect', () => {
+        if (myRoomData.isOnline && myRoomData.roomId) {
+            // The server has lost the room — we cannot recover gracefully
+            showConnectionBanner('RECONNECTED — Session lost. Returning to menu.', 'error');
+            setTimeout(() => {
+                resetLocalRoomState();
+                if (typeof resetGameToMenu === 'function') resetGameToMenu();
+            }, 2500);
+        } else {
+            showConnectionBanner('RECONNECTED!', 'success');
+        }
+    });
+
+    socket.on('reconnect_failed', () => {
+        if (typeof showModal === 'function') {
+            showModal('CONNECTION FAILED', 'Could not reach the server. Please refresh the page.');
+        }
+    });
+
+    // ── Lobby events ───────────────────────────────────────────────────────
+
     socket.on('room-created', (data) => {
         if (window.SFX) SFX.roomCreate();
         myIdentity = 'p1';
@@ -40,55 +122,54 @@ function connectMultiplayer() {
         myRoomData.isOnline = true;
     });
 
-
-    // --- NEW: Universal Room Updater (Handles Joins, Leaves, Kicks, Leadership changes) ---
+    // Universal room updater — handles joins, leaves, kicks, leadership changes
     socket.on('room-updated', (data) => {
-        // Detect Joins and Leaves
-        const isJoin = data.players.length > myRoomData.players.length;
+        const isJoin  = data.players.length > myRoomData.players.length;
         const isLeave = data.players.length < myRoomData.players.length;
-        if (isJoin && window.SFX) SFX.playerJoin();
+        if (isJoin  && window.SFX) SFX.playerJoin();
         if (isLeave && window.SFX) SFX.playerLeave();
 
         myRoomData.players = data.players;
-        myRoomData.roomId = data.roomId;
+        myRoomData.roomId  = data.roomId;
 
         // Re-evaluate leadership in case the old leader left
         const me = data.players.find(p => p.id === socket.id);
         if (me) {
-            amILeader = me.isLeader;
+            amILeader  = me.isLeader;
             myIdentity = me.role;
         }
 
         renderLobby(data.roomId, data.players);
 
-        // --- NEW: HANDLE MID-GAME ABANDONMENT ---
+        // Handle mid-game abandonment: if a player leaves during a game
         const appDiv = document.getElementById('app');
-        if (appDiv && appDiv.style.display === 'block') {
-            // If we are actively in a game, and player count drops below 2
-            if (data.players.length < 2) {
-                // Stop timers
-                if (typeof countdown !== 'undefined') clearInterval(countdown);
-
-                showModal("MATCH ABORTED", "The opponent has left the match.");
-                resetGameToMenu(); // Kick the remaining player back to menu
-            }
+        if (appDiv && appDiv.style.display === 'block' && data.players.length < 2) {
+            if (typeof countdown !== 'undefined') clearInterval(countdown);
+            if (typeof showModal === 'function') showModal('MATCH ABORTED', 'The opponent has left the match.');
+            resetGameToMenu();
         }
     });
 
-    // --- NEW: Handled getting Kicked ---
     socket.on('kicked', () => {
         resetLocalRoomState();
-        showModal("REMOVED", "You were kicked from the lobby by the Room Leader.");
+        if (typeof showModal === 'function') showModal('REMOVED', 'You were kicked from the lobby by the Room Leader.');
     });
 
+    // ── Game start ─────────────────────────────────────────────────────────
+
     socket.on('init-online-game', (data) => {
+        // Reset all transition guards for the new round
+        phaseTransitionLock   = false;
+        hasReceivedStartDuel  = false;
+
         closeModals();
+
         currentVariant = data.variant;
-        gameState.phase = data.phase; // higher_lower, drafting, blind_ranking, category_clash
+        gameState.phase = data.phase;
         if (data.limit) draftLimit = data.limit;
         if (data.categoryText) ccState.category = data.categoryText;
-        
-        currentSelections = []; // Guaranteed clean state for draft arrays
+
+        currentSelections = [];
         if (typeof isGuestWaiting !== 'undefined') isGuestWaiting = false;
 
         document.getElementById('main-menu').style.display = 'none';
@@ -96,11 +177,13 @@ function connectMultiplayer() {
         document.getElementById('leave-game-btn').style.display = 'block';
 
         if (gameState.phase === 'higher_lower') {
-            initHigherLower(); // Both players start H/L
+            initHigherLower();
         } else {
-            loadGames(); // Both players start Keep/Kill
+            loadGames();
         }
     });
+
+    // ── Library sync ───────────────────────────────────────────────────────
 
     socket.on('send-library-to-guest', () => {
         if (amILeader) {
@@ -109,92 +192,81 @@ function connectMultiplayer() {
                     roomId: myRoomData.roomId,
                     library: masterGameLibrary,
                     pool: draftingPool,
-                    ccCategory: ccState.category // Hijacked payload for robust synchronization
+                    ccCategory: ccState.category,
+                    kcuPhaseBypass: gameState.phase
                 });
             } else {
-                if (typeof isGuestWaiting !== 'undefined') {
-                    isGuestWaiting = true;
-                } else {
-                    window.isGuestWaiting = true;
-                }
+                window.isGuestWaiting = true;
             }
         }
     });
 
-    // 2. Guest receives the library
     socket.on('init-library', (data) => {
         masterGameLibrary = data.library;
         draftingPool = data.pool;
-        if (data.ccCategory) ccState.category = data.ccCategory; // Retrieve Hijacked payload
+        if (data.ccCategory) ccState.category = data.ccCategory;
         if (data.kcuPhaseBypass) {
-            gameState.phase = data.kcuPhaseBypass; // Force sync phase to override deployed server gaps
+            gameState.phase = data.kcuPhaseBypass;
             if (data.kcuPhaseBypass === 'keep_cut_upgrade') draftLimit = 3;
             else if (data.kcuPhaseBypass === 'oup') draftLimit = 5;
         }
-        
-        // Proper Fisher-Yates shuffle for the guest
+
+        // Fisher-Yates shuffle for the guest's pool
         for (let i = draftingPool.length - 1; i > 0; i--) {
             const j = Math.floor(Math.random() * (i + 1));
             [draftingPool[i], draftingPool[j]] = [draftingPool[j], draftingPool[i]];
         }
-        
+
         finalizeGameStart();
     });
 
-    // 3. Everyone receives the start games
-    socket.on('hl-init-games', (data) => {
-        console.log("Sync data received from leader:", data);
+    // ── Higher/Lower sync ──────────────────────────────────────────────────
 
+    socket.on('hl-init-games', (data) => {
         if (data.isPP) {
+            // Re-used for Global Paradox sync
             ppRandomGames = data.games;
             if (!amILeader) {
-                // Ensure late-joiners or guests are in the right phase
                 document.getElementById('draft-phase').style.display = 'none';
                 startPPRandomPhase();
             }
             return;
         }
 
-        // Force the data into the variables for Higher/Lower
         hlState.currentStandardGame = data.std;
         hlState.nextGame = data.next;
         gameState.turn = data.turn || 'p1';
-
-        // Now tell the UI to draw
         setupHLRound();
     });
 
     socket.on('hl-receive-next', (data) => {
-        console.log("Next round data received:", data);
-        
-        // ONLY the guest shifts the games. The Leader already shifted them in proceedHL.
+        // Only the guest shifts games; the leader already did it in proceedHL()
         if (!amILeader) {
             if (data.std) hlState.currentStandardGame = data.std;
             if (data.nextGame) hlState.nextGame = data.nextGame;
-            
-            // STRICTLY overwrite guest state so it never falls out of sync
             if (data.turn) gameState.turn = data.turn;
-            if (typeof data.round !== 'undefined') hlState.roundCount = data.round;
+            if (typeof data.round   !== 'undefined') hlState.roundCount = data.round;
             if (typeof data.p1Score !== 'undefined') hlState.p1Score = data.p1Score;
             if (typeof data.p2Score !== 'undefined') hlState.p2Score = data.p2Score;
-            
+
             if (data.isGameOver) {
                 const winner = (data.p1Score > data.p2Score) ? getPlayerName('p1') : getPlayerName('p2');
-                showModal("GAME OVER", `${winner} WINS!`);
+                showModal('GAME OVER', `${winner} WINS!`);
                 resetGameToMenu();
                 return;
             }
             setupHLRound();
         } else {
-            // Leader just syncs the turn to avoid any potential visual mismatches
+            // Leader just mirrors the turn to avoid visual drift
             if (data.turn) gameState.turn = data.turn;
         }
     });
 
-    // 4. Update Reveal Sync to handle turn swaps properly (and Hijack for CC)
+    // Multi-purpose sync: H/L guess reveals, CC reveals, OUP decisions, PP decisions
     socket.on('hl-sync-reveal', (data) => {
+
+        // ── Category Clash reveal (hijacked route) ─────────────────────────
         if (data.isCCReveal) {
-            // Hijacked route for CC Reveal to bypass outdated deploy constraints
             const game = masterGameLibrary.find(g => Number(g.id) === Number(data.gameId));
             if (!game) return;
             if (typeof ccRevealGameVisual === 'function') ccRevealGameVisual(data.role, data.index, game);
@@ -208,20 +280,29 @@ function connectMultiplayer() {
             return;
         }
 
+        // ── OUP decision (hijacked route) ──────────────────────────────────
         if (data.isOUP) {
+            // Index guard: drop duplicate/retransmitted events
+            if (typeof oupState !== 'undefined' && data.index !== oupState.turnIndex) return;
             if (typeof handleOUPDecisionSync === 'function') handleOUPDecisionSync(data);
             return;
         }
 
+        // ── Price Paradox decision (hijacked route) ────────────────────────
         if (data.isPP) {
+            // Index guard: drop duplicate/retransmitted events
+            const expectedIdx = (typeof ppGlobalMode !== 'undefined' && ppGlobalMode)
+                ? (typeof ppRandomIndex !== 'undefined' ? ppRandomIndex : -1)
+                : (typeof ppState_ui   !== 'undefined' ? ppState_ui.turnIndex : -1);
+            if (data.index !== expectedIdx) return;
             if (typeof handlePPDecisionSync === 'function') handlePPDecisionSync(data);
             return;
         }
 
+        // ── Standard H/L guess reveal ──────────────────────────────────────
         hlState.p1Score = data.score1;
         hlState.p2Score = data.score2;
 
-        // Use correct labels
         const p1ScoreElem = document.getElementById('hl-p1-score');
         const p2ScoreElem = document.getElementById('hl-p2-score');
         if (p1ScoreElem) p1ScoreElem.innerText = data.score1;
@@ -234,86 +315,95 @@ function connectMultiplayer() {
         }
 
         const hlnc = document.getElementById('hl-next-card');
-        hlnc.classList.add(data.isCorrect ? 'correct' : 'incorrect');
+        if (hlnc) hlnc.classList.add(data.isCorrect ? 'correct' : 'incorrect');
 
-        // Only play SFX if it was NOT our turn (we already played it in makeHLGuess)
+        // Only play SFX if it was NOT our turn (we played it ourselves in makeHLGuess)
         if (myIdentity !== gameState.turn && window.SFX) {
             if (data.isCorrect) SFX.correct();
             else SFX.incorrect();
         }
 
         setTimeout(() => {
-            hlnc.classList.remove('correct', 'incorrect');
-            badge.classList.add('hidden');
-            // Only the spectator moves to the next round (the player triggers it themselves)
+            if (hlnc) hlnc.classList.remove('correct', 'incorrect');
+            if (badge) badge.classList.add('hidden');
+            // Only the spectator calls proceedHL — the guesser already calls it
             if (data.guesser && myIdentity !== data.guesser) {
                 proceedHL();
             }
         }, 2000);
     });
 
+    // ── Draft status ───────────────────────────────────────────────────────
+
     socket.on('update-draft-status', (players) => {
         if (!myRoomData.isOnline) return;
 
         const p1 = players.find(p => p.role === 'p1');
         const p2 = players.find(p => p.role === 'p2');
-
         if (!p1 || !p2) return;
 
-        if (myIdentity === 'p1' && p1.ready && !p2.ready) {
-            document.getElementById('turn-indicator').innerText = "WAITING FOR FRIEND...";
-        }
-        else if (myIdentity === 'p2' && p2.ready && !p1.ready) {
-            document.getElementById('turn-indicator').innerText = "WAITING FOR FRIEND...";
+        const myReady     = myIdentity === 'p1' ? p1.ready : p2.ready;
+        const theirReady  = myIdentity === 'p1' ? p2.ready : p1.ready;
+
+        if (myReady && !theirReady) {
+            document.getElementById('turn-indicator').innerText = 'WAITING FOR FRIEND...';
         }
     });
 
-
-
-
+    // ── Duel phase start ───────────────────────────────────────────────────
 
     socket.on('start-duel-phase', (data) => {
         if (!myRoomData.isOnline) return;
-        
+
+        // Guard: prevent double-fire from Render.com reconnect retransmissions
+        if (phaseTransitionLock || hasReceivedStartDuel) return;
+        phaseTransitionLock  = true;
+        hasReceivedStartDuel = true;
+        // Release the lock after the transition has had time to complete
+        setTimeout(() => { phaseTransitionLock = false; }, 5000);
+
         try {
             if (data && data.p1Draft) {
-                data.p1Draft.forEach(g => { if (!masterGameLibrary.find(m => Number(m.id) === Number(g.id))) masterGameLibrary.push(g); });
+                data.p1Draft.forEach(g => {
+                    if (!masterGameLibrary.find(m => Number(m.id) === Number(g.id))) masterGameLibrary.push(g);
+                });
                 gameState.player1.draftedForP2 = data.p1Draft.map(g => Number(g.id));
             }
             if (data && data.p2Draft) {
-                data.p2Draft.forEach(g => { if (!masterGameLibrary.find(m => Number(m.id) === Number(g.id))) masterGameLibrary.push(g); });
+                data.p2Draft.forEach(g => {
+                    if (!masterGameLibrary.find(m => Number(m.id) === Number(g.id))) masterGameLibrary.push(g);
+                });
                 gameState.player2.draftedForP1 = data.p2Draft.map(g => Number(g.id));
             }
         } catch (e) {
-            console.error("Payload synchronization error bypassed: ", e);
+            console.error('Payload sync error:', e);
         }
 
-        if (gameState.phase === 'blind_ranking') {
-            startBlindRankingPhase();
-        } else if (gameState.phase === 'category_clash') {
-            startCategoryClashPhase();
-        } else if (gameState.phase === 'keep_cut_upgrade') {
-            startKeepCutUpgradePhase();
-        } else if (gameState.phase === 'oup') {
-            startOUPPhase();
-        } else if (gameState.phase === 'price_paradox') {
-            startPriceParadoxPhase();
-        } else {
-            gameState.phase = "keep_kill";
-            startKeepKillPhase();
+        // Route to the correct game phase
+        switch (gameState.phase) {
+            case 'blind_ranking':    startBlindRankingPhase();    break;
+            case 'category_clash':   startCategoryClashPhase();   break;
+            case 'keep_cut_upgrade': startKeepCutUpgradePhase();  break;
+            case 'oup':              startOUPPhase();              break;
+            case 'price_paradox':    startPriceParadoxPhase();     break;
+            default:
+                gameState.phase = 'keep_kill';
+                startKeepKillPhase();
         }
     });
 
+    // ── Blind Ranking / KCU opponent placement ────────────────────────────
+
     socket.on('br-opponent-placed', (data) => {
         if (!myRoomData.isOnline) return;
-        
+
         if (data.isKCU) {
             if (data.role === 'p1') {
                 kcuState.p1Choices = data.choices;
-                kcuState.p1Locked = true;
+                kcuState.p1Locked  = true;
             } else {
                 kcuState.p2Choices = data.choices;
-                kcuState.p2Locked = true;
+                kcuState.p2Locked  = true;
             }
             if (typeof checkKCUFinished === 'function') checkKCUFinished();
             return;
@@ -322,51 +412,70 @@ function connectMultiplayer() {
         if (typeof updateBRSlot !== 'function') return;
         const game = masterGameLibrary.find(g => Number(g.id) === Number(data.gameId));
         if (game) {
-            let ranking = data.role === 'p1' ? brState.p1Ranking : brState.p2Ranking;
+            const ranking = data.role === 'p1' ? brState.p1Ranking : brState.p2Ranking;
             ranking[data.slotIndex] = game;
             updateBRSlot(data.role, data.slotIndex, game);
             if (typeof checkBRFinished === 'function') checkBRFinished();
         }
     });
 
-    socket.on('opponent-revealed', (game) => { 
-        if (myRoomData.isOnline) {
-            // SYNC the local list by removing the revealed game so it stays consistent for YOUR turn next
-            let list = (gameState.turn === 'p1') ? gameState.player1.draftedForP2 : gameState.player2.draftedForP1;
-            const idx = list.indexOf(Number(game.id));
-            if (idx > -1) list.splice(idx, 1);
-            
-            startDecisionTurn(game); 
-        }
+    // ── Keep/Kill: opponent revealed and decided ───────────────────────────
+
+    socket.on('opponent-revealed', (game) => {
+        if (!myRoomData.isOnline) return;
+        // Sync the local list to stay consistent for the next turn
+        const list = (gameState.turn === 'p1')
+            ? gameState.player1.draftedForP2
+            : gameState.player2.draftedForP1;
+        const idx = list.indexOf(Number(game.id));
+        if (idx > -1) list.splice(idx, 1);
+        startDecisionTurn(game);
     });
-    socket.on('opponent-decided', (data) => { if (myRoomData.isOnline) handleChoice(data.choice, data.game); });
-    socket.on('error', (msg) => showModal("SERVER ERROR", msg));
-    
-    // CATEGORY CLASH LOGIC
-    socket.on('cc-reveal-sync', (data) => {
-        // Obsoleted fallback, relying on hijacked hl-sync-reveal
+
+    socket.on('opponent-decided', (data) => {
+        if (myRoomData.isOnline) handleChoice(data.choice, data.game);
     });
+
+    // ── Error passthrough ─────────────────────────────────────────────────
+
+    socket.on('error', (msg) => {
+        if (typeof showModal === 'function') showModal('SERVER ERROR', msg);
+    });
+
+    // ── Category Clash: obsoleted direct relay (now routed via hl-guess-sync)
+    socket.on('cc-reveal-sync', () => { /* no-op — kept for forward compat */ });
 }
 
-// --- LOBBY UI RENDERING ---
+// ─── ROOM STATE RESET ────────────────────────────────────────────────────────
+
 function resetLocalRoomState() {
+    // Reset all transition guards
+    phaseTransitionLock  = false;
+    hasReceivedStartDuel = false;
+
     myRoomData = {
         roomId: null,
         playerName: null,
         isOnline: false,
         players: []
     };
-    amILeader = false;
+    amILeader  = false;
     myIdentity = null;
 
-    // Visually swap back to the Join/Create screen
-    document.getElementById('room-entry-area').style.display = 'block';
-    document.getElementById('room-lobby-area').style.display = 'none';
-    document.getElementById('player-names-list').innerHTML = '';
-    document.getElementById('lobby-key-display').innerText = '---';
+    // Restore the Join/Create lobby UI
+    const entryArea = document.getElementById('room-entry-area');
+    const lobbyArea = document.getElementById('room-lobby-area');
+    const namesList = document.getElementById('player-names-list');
+    const keyDisplay = document.getElementById('lobby-key-display');
+
+    if (entryArea) entryArea.style.display = 'block';
+    if (lobbyArea) lobbyArea.style.display = 'none';
+    if (namesList) namesList.innerHTML = '';
+    if (keyDisplay) keyDisplay.innerText = '---';
 }
 
-// --- LOBBY UI RENDERING ---
+// ─── LOBBY UI RENDERING ──────────────────────────────────────────────────────
+
 function renderLobby(roomId, players) {
     document.getElementById('room-entry-area').style.display = 'none';
     document.getElementById('room-lobby-area').style.display = 'block';
@@ -377,31 +486,27 @@ function renderLobby(roomId, players) {
 
     players.forEach(p => {
         const li = document.createElement('li');
-        li.className = 'lobby-player-row'; // New class from our CSS
+        li.className = 'lobby-player-row';
 
         const isMe = (p.id === socket.id);
-
         let nameHTML = p.isLeader ? '👑 ' : '';
         nameHTML += p.name.toUpperCase();
-        if (isMe) nameHTML += " (YOU)";
+        if (isMe) nameHTML += ' (YOU)';
 
-        // Create the name span
         const nameSpan = document.createElement('span');
         nameSpan.innerHTML = nameHTML;
-        nameSpan.style.color = (p.role === 'p1') ? 'var(--neon-p1)' : 'var(--neon-p2)';
-        nameSpan.style.fontSize = "18px";
-        nameSpan.style.fontWeight = "900";
+        nameSpan.style.color      = (p.role === 'p1') ? 'var(--neon-p1)' : 'var(--neon-p2)';
+        nameSpan.style.fontSize   = '18px';
+        nameSpan.style.fontWeight = '900';
         li.appendChild(nameSpan);
 
-        // --- NEW: Add KICK button if I am the leader and this is not me ---
+        // Kick button — only the leader can see it, and only for others
         if (amILeader && !isMe) {
             const kickBtn = document.createElement('button');
             kickBtn.className = 'kick-btn';
             kickBtn.innerText = 'KICK';
             kickBtn.onclick = () => {
-                if (socket) {
-                    socket.emit('kick-player', { roomId: roomId, targetId: p.id });
-                }
+                if (socket) socket.emit('kick-player', { roomId, targetId: p.id });
             };
             li.appendChild(kickBtn);
         }
@@ -409,49 +514,53 @@ function renderLobby(roomId, players) {
         list.appendChild(li);
     });
 
-    // Update Status Text
-    if (players.length === 2) {
-        document.getElementById('lobby-status-text').innerText = amILeader ? "READY TO START" : "WAITING FOR LEADER...";
-        document.getElementById('lobby-status-text').classList.remove('status-pulse');
-        document.getElementById('lobby-status-text').style.color = 'var(--neon-p1)';
-    } else {
-        document.getElementById('lobby-status-text').innerText = "Waiting for opponent...";
-        document.getElementById('lobby-status-text').classList.add('status-pulse');
-        document.getElementById('lobby-status-text').style.color = 'var(--accent)';
+    // Status text
+    const statusEl = document.getElementById('lobby-status-text');
+    if (statusEl) {
+        if (players.length === 2) {
+            statusEl.innerText = amILeader ? 'READY TO START' : 'WAITING FOR LEADER...';
+            statusEl.classList.remove('status-pulse');
+            statusEl.style.color = 'var(--neon-p1)';
+        } else {
+            statusEl.innerText = 'Waiting for opponent...';
+            statusEl.classList.add('status-pulse');
+            statusEl.style.color = 'var(--accent)';
+        }
     }
 }
 
-// --- BUTTON INTERACTIONS ---
+// ─── LOBBY BUTTON HANDLERS ───────────────────────────────────────────────────
 
-// Create Room Button
 document.getElementById('create-room-btn').onclick = () => {
     connectMultiplayer();
-    const name = document.getElementById('player-name-input').value;
-    if (!name) return showModal("ERROR", "Enter a name first!");
+    const name = document.getElementById('player-name-input').value.trim();
+    if (!name) return showModal('ERROR', 'Enter a name first!');
 
     if (socket && socket.connected) {
         socket.emit('create-room', name);
     } else {
         const btn = document.getElementById('create-room-btn');
         const origText = btn.innerText;
-        btn.innerText = "CONNECTING...";
-        btn.disabled = true;
+        btn.innerText  = 'CONNECTING...';
+        btn.disabled   = true;
 
         setTimeout(() => {
             btn.innerText = origText;
-            btn.disabled = false;
+            btn.disabled  = false;
+
             if (!socket || !socket.connected) {
                 let timeLeft = 15;
-                showModal("SERVER OFFLINE", `The server is offline or waking up. Please try again in ${timeLeft} seconds.`);
+                showModal('SERVER OFFLINE', `The server is waking up. Please try again in ${timeLeft} seconds.`);
                 const interval = setInterval(() => {
                     const titleNode = document.getElementById('modal-title');
-                    if (!titleNode || titleNode.innerText !== "SERVER OFFLINE") {
+                    if (!titleNode || titleNode.innerText !== 'SERVER OFFLINE') {
                         clearInterval(interval);
                         return;
                     }
                     timeLeft--;
                     if (timeLeft > 0) {
-                        document.getElementById('modal-message').innerText = `The server is offline or waking up. Please try again in ${timeLeft} seconds.`;
+                        document.getElementById('modal-message').innerText =
+                            `The server is waking up. Please try again in ${timeLeft} seconds.`;
                     } else {
                         clearInterval(interval);
                         document.getElementById('custom-modal').style.display = 'none';
@@ -464,24 +573,23 @@ document.getElementById('create-room-btn').onclick = () => {
     }
 };
 
-// Join Room Button
 document.getElementById('join-room-btn').onclick = () => {
     connectMultiplayer();
-    const name = document.getElementById('player-name-input').value;
-    const room = document.getElementById('join-room-input').value.toUpperCase();
-    if (!name || !room) return showModal("ERROR", "Name and Room Key required!");
-    socket.emit('join-room', { roomId: room, name: name });
+    const name = document.getElementById('player-name-input').value.trim();
+    const room = document.getElementById('join-room-input').value.trim().toUpperCase();
+    if (!name || !room) return showModal('ERROR', 'Name and Room Key required!');
+    socket.emit('join-room', { roomId: room, name });
 };
 
-// --- NEW: LEAVE ROOM BUTTON LOGIC ---
+// Leave lobby button
 const leaveBtn = document.getElementById('leave-room-btn');
 if (leaveBtn) {
     const doLeave = (e) => {
         if (e && e.type === 'touchstart') e.preventDefault();
         if (socket && myRoomData.roomId) {
-            socket.emit('leave-room', myRoomData.roomId); // Tell server we left
+            socket.emit('leave-room', myRoomData.roomId);
         }
-        resetLocalRoomState(); // Reset our local UI back to the Join/Create screen
+        resetLocalRoomState();
     };
     leaveBtn.onclick = doLeave;
     leaveBtn.addEventListener('touchstart', doLeave, { passive: false });

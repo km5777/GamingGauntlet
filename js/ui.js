@@ -1,5 +1,27 @@
 let countdown;
 
+/**
+ * isRevealPickLocked — mutex for the Keep/Kill reveal picker.
+ * Whichever fires first (click OR auto-timer) sets this to true.
+ * The other path checks it and returns immediately, preventing
+ * two games from being spliced and two reveal-game events from firing.
+ * Reset to false at the start of every showRevealPicker() call.
+ */
+let isRevealPickLocked = false;
+
+/**
+ * isCCRevealing — prevents the Category Clash reveal button from
+ * firing twice if a lag spike delivers two socket events back-to-back.
+ * Reset at the top of updateCCPlayerControls() on every re-render.
+ */
+let isCCRevealing = false;
+
+/**
+ * ppControlsAbortController — cleans up PP button event listeners
+ * without touching the DOM (replaces the old cloneNode pattern).
+ */
+let ppControlsAbortController = null;
+
 let music = null;
 let volSlider = null;
 
@@ -139,69 +161,80 @@ function setupEmptyGrids() {
 }
 
 function showRevealPicker() {
+    // Reset the mutex for each new picker round
+    isRevealPickLocked = false;
+
     const container = document.getElementById('active-game-container');
     document.getElementById('action-btns').style.display = 'none';
 
-    const attackerRole = gameState.turn; // 'p1' or 'p2'
+    const attackerRole = gameState.turn;
     const opponentRole = (attackerRole === 'p1') ? 'p2' : 'p1';
-
-    // Check if I am the one who should be picking
     const isMyTurnToPick = (myRoomData.isOnline) ? (myIdentity === attackerRole) : true;
 
     if (isMyTurnToPick) {
         const targetName = getPlayerName(opponentRole);
         document.getElementById('duel-status').innerText = `REVEAL A GAME FOR ${targetName}`;
 
-        container.className = "centered-grid";
+        container.className = 'centered-grid';
         container.innerHTML = '';
 
         let list = (attackerRole === 'p1') ? gameState.player1.draftedForP2 : gameState.player2.draftedForP1;
 
-        list.forEach((gameId, index) => {
+        list.forEach((gameId) => {
             const game = masterGameLibrary.find(g => Number(g.id) === Number(gameId));
             if (!game) return;
+
             const card = document.createElement('div');
             card.className = 'reveal-choice-card';
-            card.style.opacity = "1";
+            card.style.opacity = '1';
             card.innerHTML = `<img src="${game.background_image}"><div class="reveal-card-label">${game.name}</div>`;
 
             card.onclick = () => {
+                // BUG FIX: isRevealPickLocked prevents the auto-timer from also
+                // firing at the exact same moment, which would splice two games
+                // and emit two reveal-game events, permanently breaking the round count.
                 if (card.dataset.clicked) return;
-                card.dataset.clicked = "true";
+                if (isRevealPickLocked) return;
+                isRevealPickLocked = true;
 
-                // Prevent any other cards from being clicked as well
-                document.querySelectorAll('.reveal-choice-card').forEach(c => c.dataset.clicked = "true");
+                card.dataset.clicked = 'true';
+                document.querySelectorAll('.reveal-choice-card').forEach(c => c.dataset.clicked = 'true');
 
-                // Safely find the current index of the game ID to prevent off-by-one errors from fast clicking
                 const currentIdx = list.indexOf(gameId);
-                if (currentIdx > -1) {
-                    list.splice(currentIdx, 1);
-                }
+                if (currentIdx > -1) list.splice(currentIdx, 1);
 
                 if (myRoomData.isOnline) {
-                    socket.emit('reveal-game', { roomId: myRoomData.roomId, game: game });
+                    socket.emit('reveal-game', { roomId: myRoomData.roomId, game });
                 } else {
                     startDecisionTurn(game);
                 }
             };
             container.appendChild(card);
         });
-        startGlobalTimer(15, () => {
-            // Only the person who is supposed to pick triggers the random choice
-            if (isMyTurnToPick) {
-                const idx = Math.floor(Math.random() * list.length);
-                const game = masterGameLibrary.find(g => g.id === list[idx]);
-                list.splice(idx, 1);
 
-                if (myRoomData.isOnline && socket) {
-                    socket.emit('reveal-game', { roomId: myRoomData.roomId, game: game });
-                } else {
-                    startDecisionTurn(game);
-                }
+        startGlobalTimer(15, () => {
+            if (!isMyTurnToPick) return;
+            // BUG FIX: If the player clicked at the last second, the lock is
+            // already true — abort the auto-pick so we don't double-splice.
+            if (isRevealPickLocked) return;
+            isRevealPickLocked = true;
+
+            // Safety: don't splice or emit if the list is somehow empty
+            if (!list || list.length === 0) return;
+
+            const idx  = Math.floor(Math.random() * list.length);
+            // Use Number() consistently to avoid type mismatch returning undefined
+            const game = masterGameLibrary.find(g => Number(g.id) === Number(list[idx]));
+            if (!game) return;
+            list.splice(idx, 1);
+
+            if (myRoomData.isOnline && socket) {
+                socket.emit('reveal-game', { roomId: myRoomData.roomId, game });
+            } else {
+                startDecisionTurn(game);
             }
         });
     } else {
-        // I am watching the opponent pick
         document.getElementById('duel-status').innerText = `WAITING FOR ${getPlayerName(attackerRole)} TO PICK...`;
         container.innerHTML = '<div class="spinner"></div>';
         clearInterval(countdown);
@@ -335,27 +368,33 @@ function updateVisualGrid(playerID, type, game, index) {
 
 function showModal(title, message) {
     const modal = document.getElementById('custom-modal');
+    if (!modal) return;
     const modalContent = modal.querySelector('.modal-content');
 
     if (window.SFX) SFX.popup();
-    
+
     document.getElementById('modal-title').innerText = title;
     document.getElementById('modal-message').innerText = message;
     modal.style.display = 'flex';
-    
+
     if (modalContent) {
         modalContent.classList.remove('animate-pop-in');
-        void modalContent.offsetWidth; 
+        void modalContent.offsetWidth;
         modalContent.classList.add('animate-pop-in');
     }
 
-    // Dim music slightly for the modal
-    const originalVol = music.volume;
-    music.volume = originalVol * 0.5;
+    // BUG FIX: music can be null if the modal fires before the user has
+    // interacted with the page (e.g. on a network error at startup).
+    // A crash here would silently break ALL error handling everywhere.
+    let originalVol = 0;
+    if (music && !music.paused) {
+        originalVol = music.volume;
+        music.volume = Math.max(0, originalVol * 0.5);
+    }
 
     document.getElementById('modal-close-btn').onclick = () => {
         closeModalWithAnim(modal);
-        music.volume = originalVol; // Restore volume
+        if (music && !music.paused) music.volume = originalVol;
     };
 }
 
@@ -1360,66 +1399,80 @@ function setupCCGrids() {
 }
 
 function updateCCPlayerControls() {
-    const isMyTurn = (!myRoomData.isOnline) ? true : (myIdentity === ccState.revealTurn);
-    const btn = document.getElementById('cc-reveal-btn');
+    // BUG FIX: Reset the reveal lock on every re-render so the button
+    // is always interactive after an incoming socket event updates state.
+    isCCRevealing = false;
+
+    const isMyTurn  = (!myRoomData.isOnline) ? true : (myIdentity === ccState.revealTurn);
+    const btn       = document.getElementById('cc-reveal-btn');
     const indicator = document.getElementById('cc-turn-indicator');
     if (!btn || !indicator) return;
-    
+
     if (ccState.revealIndex < 0) {
-        indicator.innerText = "ALL RANKS REVEALED!";
-        btn.style.display = 'none';
-        
+        indicator.innerText = 'ALL RANKS REVEALED!';
+        btn.style.display   = 'none';
         if (!document.getElementById('cc-finish-btn')) {
             const finishBtn = document.createElement('button');
-            finishBtn.id = 'cc-finish-btn';
+            finishBtn.id        = 'cc-finish-btn';
             finishBtn.className = 'glow-btn pink';
             finishBtn.innerText = 'BACK TO MENU';
             finishBtn.style.marginTop = '20px';
-            finishBtn.onclick = resetGameToMenu;
+            finishBtn.onclick   = resetGameToMenu;
             indicator.parentNode.appendChild(finishBtn);
         }
         return;
     }
-    
-    const rankNum = ccState.revealIndex + 1;
+
+    const rankNum   = ccState.revealIndex + 1;
     const actorName = getPlayerName(ccState.revealTurn);
-    
+
     if (isMyTurn) {
         indicator.innerText = `YOUR TURN TO REVEAL RANK ${rankNum}`;
-        btn.style.display = 'block';
-        btn.innerText = `REVEAL RANK ${rankNum}`;
+        btn.innerText       = `REVEAL RANK ${rankNum}`;
+        btn.disabled        = false;
+        btn.style.opacity   = '1';
+        btn.style.display   = 'block';
+
         btn.onclick = () => {
-            btn.style.display = 'none'; 
-            
-            // In Category Clash, checking Local Data
-            // Draft phase stored P1 selections exactly like normal: 5 selections in order
-            const draftList = (ccState.revealTurn === 'p1') ? gameState.player1.draftedForP2 : gameState.player2.draftedForP1;
+            // BUG FIX: isCCRevealing prevents a rapid double-click or a
+            // lag-spike retransmission from firing the reveal twice, which
+            // would cause the button to permanently vanish on the wrong player.
+            if (isCCRevealing) return;
+            isCCRevealing   = true;
+            btn.disabled    = true;
+            btn.style.opacity = '0.5';
+
+            const draftList = (ccState.revealTurn === 'p1')
+                ? gameState.player1.draftedForP2
+                : gameState.player2.draftedForP1;
             const gameId = draftList[ccState.revealIndex];
-            
+
             if (myRoomData.isOnline) {
                 socket.emit('hl-guess-sync', {
-                    roomId: myRoomData.roomId,
-                    isCCReveal: true, // Hijacked payload to bypass undeployed server constraints
-                    role: ccState.revealTurn,
-                    index: ccState.revealIndex,
-                    gameId: gameId
+                    roomId:     myRoomData.roomId,
+                    isCCReveal: true,
+                    role:       ccState.revealTurn,
+                    index:      ccState.revealIndex,
+                    gameId
                 });
+                // Do NOT touch btn.style.display here — let the incoming
+                // socket event drive the state update via updateCCPlayerControls()
             } else {
                 const game = masterGameLibrary.find(g => Number(g.id) === Number(gameId));
                 ccRevealGameVisual(ccState.revealTurn, ccState.revealIndex, game);
-                
                 if (ccState.revealTurn === 'p1') {
                     ccState.revealTurn = 'p2';
                 } else {
                     ccState.revealTurn = 'p1';
                     ccState.revealIndex--;
                 }
+                // isCCRevealing is reset at the top of the next call
                 updateCCPlayerControls();
             }
         };
     } else {
         indicator.innerText = `WAITING FOR ${actorName.toUpperCase()}...`;
-        btn.style.display = 'none';
+        btn.style.display   = 'none';
     }
 }
 
@@ -2051,22 +2104,29 @@ function renderPPBoardGlobal() {
 }
 
 function setupPPControls(isEnabled) {
-    const btnB = document.getElementById("pp-btn-buy");
-    const btnS = document.getElementById("pp-btn-sale");
-    const btnK = document.getElementById("pp-btn-skip");
+    // BUG FIX: The old approach used cloneNode(true) + replaceChild() to strip
+    // old listeners. This destroyed the DOM node mid-click, causing the browser
+    // to lose the click event before it reached the new onclick handler.
+    // AbortController cleanly detaches listeners without touching the DOM at all.
+    if (ppControlsAbortController) ppControlsAbortController.abort();
+    ppControlsAbortController = new AbortController();
+    const { signal } = ppControlsAbortController;
+
+    const btnB = document.getElementById('pp-btn-buy');
+    const btnS = document.getElementById('pp-btn-sale');
+    const btnK = document.getElementById('pp-btn-skip');
 
     [btnB, btnS, btnK].forEach(btn => {
         if (!btn) return;
-        btn.style.opacity = isEnabled ? "1" : "0.5";
-        btn.style.cursor = isEnabled ? "pointer" : "not-allowed";
-        const newBtn = btn.cloneNode(true);
-        btn.parentNode.replaceChild(newBtn, btn);
+        btn.style.opacity = isEnabled ? '1' : '0.5';
+        btn.style.cursor  = isEnabled ? 'pointer' : 'not-allowed';
+        btn.disabled      = !isEnabled;
     });
 
-    if (isEnabled) {
-        document.getElementById("pp-btn-buy").onclick = () => assignPPFate("buy");
-        document.getElementById("pp-btn-sale").onclick = () => assignPPFate("sale");
-        document.getElementById("pp-btn-skip").onclick = () => assignPPFate("skip");
+    if (isEnabled && btnB && btnS && btnK) {
+        btnB.addEventListener('click', () => assignPPFate('buy'),  { signal });
+        btnS.addEventListener('click', () => assignPPFate('sale'), { signal });
+        btnK.addEventListener('click', () => assignPPFate('skip'), { signal });
     }
 }
 
