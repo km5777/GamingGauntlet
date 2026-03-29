@@ -400,11 +400,18 @@ function showModal(title, message) {
 
 
 function resetGameToMenu() {
+    // Reset all game-start guards (games.js + multiplayer.js variables)
+    if (typeof gameHasStarted        !== 'undefined') gameHasStarted        = false;
+    if (typeof phaseTransitionLock   !== 'undefined') phaseTransitionLock   = false;
+    if (typeof hasReceivedStartDuel  !== 'undefined') hasReceivedStartDuel  = false;
+    if (guestSyncRetryInterval) { clearInterval(guestSyncRetryInterval); guestSyncRetryInterval = null; }
+
     gameState.phase = "drafting";
     gameState.turn = "p1";
     gameState.player1 = { draftedForP2: [], keeps: [], kills: [], rerolls: 2 };
     gameState.player2 = { draftedForP1: [], keeps: [], kills: [], rerolls: 2 };
     currentSelections = [];
+
 
     // ADDED NULL CHECKS FOR ALL UI UPDATES
     const counter = document.getElementById('counter');

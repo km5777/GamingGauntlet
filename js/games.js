@@ -1,8 +1,22 @@
 const API_KEY = "62593b97a74e46aca2f4820ee2548f86";
-let masterGameLibrary = []; // One massive bucket of thousands of famous games
+let masterGameLibrary = [];
 let currentVariant = 'random';
 let draftingPool = [];
 let isGuestWaiting = false;
+
+/**
+ * gameHasStarted — one-shot guard for finalizeGameStart().
+ * Prevents double-init if both the 'always broadcast' and 'on-demand'
+ * library sync paths deliver init-library to the same player.
+ * Reset in resetGameToMenu() via the gameLogic or directly here.
+ */
+let gameHasStarted = false;
+
+/**
+ * guestSyncRetryInterval — repeating timer on the guest side.
+ * Re-sends request-library-sync every 3 seconds until the library arrives.
+ */
+let guestSyncRetryInterval = null;
 
 function shuffleArray(array) {
     for (let i = array.length - 1; i > 0; i--) {
@@ -18,9 +32,22 @@ async function loadGames() {
     document.getElementById('app').style.display = 'none';
 
     if (myRoomData.isOnline && !amILeader) {
-        document.querySelector('.loading-text').innerText = "WAITING FOR LEADER TO SYNC...";
-        // TELL THE LEADER: "I am here and ready for the library!"
+        document.querySelector('.loading-text').innerText = 'WAITING FOR LEADER TO SYNC...';
+
+        // Send the initial request
         socket.emit('request-library-sync', { roomId: myRoomData.roomId });
+
+        // Retry every 3 seconds in case the first request was dropped
+        // (Render.com free tier can drop socket events during wake-up).
+        // The interval is cancelled inside the init-library handler.
+        if (guestSyncRetryInterval) clearInterval(guestSyncRetryInterval);
+        guestSyncRetryInterval = setInterval(() => {
+            if (!myRoomData.isOnline || gameHasStarted) {
+                clearInterval(guestSyncRetryInterval);
+                return;
+            }
+            socket.emit('request-library-sync', { roomId: myRoomData.roomId });
+        }, 3000);
         return;
     }
 
@@ -66,21 +93,21 @@ async function loadGames() {
         shuffleArray(masterGameLibrary);
         draftingPool = [...masterGameLibrary];
 
-        // If local, start now. If online, we wait for P2 to ask 
+        // ── Online leader: always broadcast library the moment it's ready ──
+        // Removed the `isGuestWaiting` gate — leader now proactively sends
+        // so the guest doesn't have to perfectly time its request-library-sync.
         if (!myRoomData.isOnline) {
             finalizeGameStart();
-        } else {
-            if (amILeader && isGuestWaiting) {
-                socket.emit('sync-library', {
-                    roomId: myRoomData.roomId,
-                    library: masterGameLibrary,
-                    pool: draftingPool,
-                    ccCategory: ccState.category, // Hijacked payload for robust synchronization
-                    kcuPhaseBypass: gameState.phase // Pass the phase in case the server dropped it
-                });
-                isGuestWaiting = false;
-            }
-            document.querySelector('.loading-text').innerText = "WAITING FOR FRIEND TO JOIN...";
+        } else if (amILeader) {
+            socket.emit('sync-library', {
+                roomId: myRoomData.roomId,
+                library: masterGameLibrary,
+                pool: draftingPool,
+                ccCategory: ccState.category,
+                kcuPhaseBypass: gameState.phase
+            });
+            isGuestWaiting = false;
+            document.querySelector('.loading-text').innerText = 'WAITING FOR FRIEND TO JOIN...';
         }
 
     } catch (e) {
@@ -90,6 +117,17 @@ async function loadGames() {
 }
 
 function finalizeGameStart() {
+    // Guard: prevent double-init if both the proactive broadcast and the
+    // on-demand sync-library both deliver init-library to the same player.
+    if (gameHasStarted) return;
+    gameHasStarted = true;
+
+    // Cancel guest retry loop if still running
+    if (guestSyncRetryInterval) {
+        clearInterval(guestSyncRetryInterval);
+        guestSyncRetryInterval = null;
+    }
+
     document.getElementById('loading-screen').style.display = 'none';
     document.getElementById('app').style.display = 'block';
 

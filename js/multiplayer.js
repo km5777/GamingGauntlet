@@ -79,25 +79,27 @@ function connectMultiplayer() {
 
     socket.on('disconnect', (reason) => {
         // Only warn during active gameplay — lobby drops are less alarming
-        if (myRoomData.isOnline) {
+        if (myRoomData.isOnline && myRoomData.roomId) {
             showConnectionBanner('CONNECTION LOST — RECONNECTING...', 'warning');
         }
     });
 
-    socket.on('reconnect', () => {
+    // Socket.io v4: reconnect fires on the MANAGER (socket.io), not the socket itself.
+    // socket.on('connect') also fires on both initial connect AND every reconnect.
+    socket.on('connect', () => {
+        // If we were mid-game and the socket just reconnected (new socket.id),
+        // the server's room no longer has this socket — session is unrecoverable.
+        if (socket.recovered) return; // Socket.io v4.6+ state recovery — session is intact
         if (myRoomData.isOnline && myRoomData.roomId) {
-            // The server has lost the room — we cannot recover gracefully
             showConnectionBanner('RECONNECTED — Session lost. Returning to menu.', 'error');
             setTimeout(() => {
                 resetLocalRoomState();
                 if (typeof resetGameToMenu === 'function') resetGameToMenu();
             }, 2500);
-        } else {
-            showConnectionBanner('RECONNECTED!', 'success');
         }
     });
 
-    socket.on('reconnect_failed', () => {
+    socket.io.on('reconnect_failed', () => {
         if (typeof showModal === 'function') {
             showModal('CONNECTION FAILED', 'Could not reach the server. Please refresh the page.');
         }
@@ -186,18 +188,19 @@ function connectMultiplayer() {
     // ── Library sync ───────────────────────────────────────────────────────
 
     socket.on('send-library-to-guest', () => {
-        if (amILeader) {
-            if (typeof masterGameLibrary !== 'undefined' && masterGameLibrary.length > 0) {
-                socket.emit('sync-library', {
-                    roomId: myRoomData.roomId,
-                    library: masterGameLibrary,
-                    pool: draftingPool,
-                    ccCategory: ccState.category,
-                    kcuPhaseBypass: gameState.phase
-                });
-            } else {
-                isGuestWaiting = true; // Must reference the let-binding from games.js, NOT window.*
-            }
+        if (!amILeader) return;
+        if (typeof masterGameLibrary !== 'undefined' && masterGameLibrary.length > 0) {
+            // Library is ready — send immediately
+            socket.emit('sync-library', {
+                roomId: myRoomData.roomId,
+                library: masterGameLibrary,
+                pool: draftingPool,
+                ccCategory: ccState.category,
+                kcuPhaseBypass: gameState.phase
+            });
+        } else {
+            // Library not ready yet — flag so loadGames() sends it when done
+            isGuestWaiting = true;
         }
     });
 
