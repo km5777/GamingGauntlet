@@ -75,6 +75,9 @@ function finalizeGameStart() {
     document.getElementById('loading-screen').style.display = 'none';
     document.getElementById('app').style.display = 'block';
 
+    const leaveBtn = document.getElementById('leave-game-btn');
+    if (leaveBtn) leaveBtn.style.display = 'block';
+
     const counter = document.getElementById('counter');
     if (counter) counter.innerText = `SELECTED: 0 / ${draftLimit}`;
 
@@ -106,6 +109,9 @@ function finalizeGameStart() {
             document.getElementById('search-container').style.display = 'block';
             document.getElementById('reroll-btn').style.display = 'none';
             document.getElementById('game-library').innerHTML = '';
+            if (gameState.phase === 'category_clash') {
+                renderCCDraftGrid();
+            }
         } else {
             document.getElementById('search-container').style.display = 'none';
             document.getElementById('reroll-btn').style.display = 'block';
@@ -118,8 +124,7 @@ function finalizeGameStart() {
 async function searchRAWG(query) {
     if (query.length < 3) return [];
     try {
-        // Added &search_precise=true to make results more relevant
-        const url = `https://api.rawg.io/api/games?key=${API_KEY}&search=${query}&page_size=10&search_precise=true`;
+        const url = `https://api.rawg.io/api/games?key=${API_KEY}&search=${query}&page_size=10`;
         const resp = await fetch(url);
         if (!resp.ok) return [];
         const data = await resp.json();

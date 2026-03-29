@@ -61,6 +61,13 @@ function startGlobalTimer(seconds, onTimeout) {
 function renderGameLibrary(games) {
     const lib = document.getElementById('game-library');
     if (!lib) return;
+    
+    // Reset styles that might have been changed by Category Clash
+    lib.style.display = '';
+    lib.style.flexDirection = '';
+    lib.style.width = '';
+    lib.style.maxWidth = '';
+    
     lib.innerHTML = '';
     window.scrollTo(0, 0);
 
@@ -95,6 +102,8 @@ function startPlayer2Draft() {
     // Grab a FRESH 40 for Player 2 (if in Random mode)
     if (currentVariant === 'random') {
         refreshLibraryUI();
+    } else if (gameState.phase === 'category_clash') {
+        renderCCDraftGrid();
     }
 
     window.scrollTo(0, 0);
@@ -157,7 +166,18 @@ function showRevealPicker() {
             card.innerHTML = `<img src="${game.background_image}"><div class="reveal-card-label">${game.name}</div>`;
 
             card.onclick = () => {
-                list.splice(index, 1);
+                if (card.dataset.clicked) return;
+                card.dataset.clicked = "true";
+
+                // Prevent any other cards from being clicked as well
+                document.querySelectorAll('.reveal-choice-card').forEach(c => c.dataset.clicked = "true");
+
+                // Safely find the current index of the game ID to prevent off-by-one errors from fast clicking
+                const currentIdx = list.indexOf(gameId);
+                if (currentIdx > -1) {
+                    list.splice(currentIdx, 1);
+                }
+
                 if (myRoomData.isOnline) {
                     socket.emit('reveal-game', { roomId: myRoomData.roomId, game: game });
                 } else {
@@ -271,9 +291,11 @@ function handleChoice(choice, game) {
 
     // We trust 'choice' here because it was validated before being sent/called
     if (choice === 'keep') {
+        if (window.SFX) SFX.keep();
         defenderData.keeps.push(game);
         updateVisualGrid(defenderRole, 'keep', game, defenderData.keeps.length - 1);
     } else {
+        if (window.SFX) SFX.kill();
         defenderData.kills.push(game);
         updateVisualGrid(defenderRole, 'kill', game, defenderData.kills.length - 1);
     }
@@ -313,16 +335,26 @@ function updateVisualGrid(playerID, type, game, index) {
 
 function showModal(title, message) {
     const modal = document.getElementById('custom-modal');
+    const modalContent = modal.querySelector('.modal-content');
+
+    if (window.SFX) SFX.popup();
+    
     document.getElementById('modal-title').innerText = title;
     document.getElementById('modal-message').innerText = message;
     modal.style.display = 'flex';
+    
+    if (modalContent) {
+        modalContent.classList.remove('animate-pop-in');
+        void modalContent.offsetWidth; 
+        modalContent.classList.add('animate-pop-in');
+    }
 
     // Dim music slightly for the modal
     const originalVol = music.volume;
     music.volume = originalVol * 0.5;
 
     document.getElementById('modal-close-btn').onclick = () => {
-        modal.style.display = 'none';
+        closeModalWithAnim(modal);
         music.volume = originalVol; // Restore volume
     };
 }
@@ -380,16 +412,19 @@ function resetGameToMenu() {
 document.getElementById('confirm-btn').onclick = handleConfirm;
 
 document.getElementById('open-games-btn').onclick = () => {
+    if (window.SFX) SFX.openUI();
     document.getElementById('modal-game-selection').style.display = 'flex';
 };
 
 document.getElementById('open-online-btn').onclick = () => {
+    if (window.SFX) SFX.openUI();
     // Start the socket connection only when the user wants to play online
     if (typeof connectMultiplayer === "function") connectMultiplayer();
 
     document.getElementById('modal-online-rooms').style.display = 'flex';
 };
 document.getElementById('mode-keep-kill').onclick = () => {
+    if (window.SFX) SFX.openUI();
     gameState.phase = "drafting";
     draftLimit = 10; // Default for keep/kill
     // UI Indicator
@@ -398,27 +433,32 @@ document.getElementById('mode-keep-kill').onclick = () => {
     const brMode = document.getElementById('mode-blind-ranking');
     if (brMode) brMode.classList.remove('active-mode');
 
-    closeModals();
+    document.getElementById('modal-game-selection').style.display = 'none';
     document.getElementById('modal-variant-selection').style.display = 'flex';
 };
 
 
 
 document.getElementById('variant-random').onclick = () => {
+    if (window.SFX) SFX.openUI();
     currentVariant = 'random';
-    closeModals();
+    document.getElementById('modal-variant-selection').style.display = 'none';
+    document.getElementById('modal-br-limits').style.display = 'none';
     document.getElementById('modal-game-selection').style.display = 'flex';
     document.getElementById('sub-mode-selection').style.display = 'block';
 };
 
 document.getElementById('variant-search').onclick = () => {
+    if (window.SFX) SFX.openUI();
     currentVariant = 'search'; // Must be lowercase 'search'
-    closeModals();
+    document.getElementById('modal-variant-selection').style.display = 'none';
+    document.getElementById('modal-br-limits').style.display = 'none';
     document.getElementById('modal-game-selection').style.display = 'flex';
     document.getElementById('sub-mode-selection').style.display = 'block';
 };
 
 document.getElementById('mode-higher-lower').onclick = () => {
+    if (window.SFX) SFX.openUI();
     gameState.phase = "higher_lower";
     currentVariant = 'random';
     // UI Indicator
@@ -427,23 +467,42 @@ document.getElementById('mode-higher-lower').onclick = () => {
     const brMode = document.getElementById('mode-blind-ranking');
     if (brMode) brMode.classList.remove('active-mode');
 
-    closeModals();
-    document.getElementById('modal-game-selection').style.display = 'flex';
+    // Higher lower doesn't need to ask for search vs random or limits, it just unlocks play buttons
     document.getElementById('sub-mode-selection').style.display = 'block';
 };
 
 const brModeBtn = document.getElementById('mode-blind-ranking');
 if (brModeBtn) {
     brModeBtn.onclick = () => {
+        if (window.SFX) SFX.openUI();
         gameState.phase = "blind_ranking";
         currentVariant = 'search'; // Force search variant for Blind Ranking
         
         brModeBtn.classList.add('active-mode');
         document.getElementById('mode-keep-kill').classList.remove('active-mode');
         document.getElementById('mode-higher-lower').classList.remove('active-mode');
+        const ccMode = document.getElementById('mode-category-clash');
+        if (ccMode) ccMode.classList.remove('active-mode');
         
-        closeModals();
+        document.getElementById('modal-game-selection').style.display = 'none';
         document.getElementById('modal-br-limits').style.display = 'flex';
+    };
+}
+
+const ccModeBtn = document.getElementById('mode-category-clash');
+if (ccModeBtn) {
+    ccModeBtn.onclick = () => {
+        if (window.SFX) SFX.openUI();
+        gameState.phase = "category_clash";
+        currentVariant = 'search'; 
+        draftLimit = 5;
+        
+        ccModeBtn.classList.add('active-mode');
+        document.getElementById('mode-keep-kill').classList.remove('active-mode');
+        document.getElementById('mode-higher-lower').classList.remove('active-mode');
+        if (brModeBtn) brModeBtn.classList.remove('active-mode');
+        
+        document.getElementById('sub-mode-selection').style.display = 'block';
     };
 }
 
@@ -451,7 +510,7 @@ const brLimit5Btn = document.getElementById('br-limit-5');
 if (brLimit5Btn) {
     brLimit5Btn.onclick = () => {
         draftLimit = 5;
-        closeModals();
+        document.getElementById('modal-br-limits').style.display = 'none';
         document.getElementById('modal-game-selection').style.display = 'flex';
         document.getElementById('sub-mode-selection').style.display = 'block';
     };
@@ -461,7 +520,7 @@ const brLimit10Btn = document.getElementById('br-limit-10');
 if (brLimit10Btn) {
     brLimit10Btn.onclick = () => {
         draftLimit = 10;
-        closeModals();
+        document.getElementById('modal-br-limits').style.display = 'none';
         document.getElementById('modal-game-selection').style.display = 'flex';
         document.getElementById('sub-mode-selection').style.display = 'block';
     };
@@ -469,8 +528,33 @@ if (brLimit10Btn) {
 
 document.getElementById('play-local-btn').onclick = () => {
     myRoomData.isOnline = false;
+    if (gameState.phase === 'category_clash') {
+        document.getElementById('modal-game-selection').style.display = 'none';
+        document.getElementById('modal-category-prompt').style.display = 'flex';
+    } else {
+        closeModals();
+        loadGames(); 
+    }
+};
+
+document.getElementById('cc-confirm-setup-btn').onclick = () => {
+    const topic = document.getElementById('cc-category-input').value.trim();
+    if (!topic || topic.length < 2) return showModal("ERROR", "Please enter a valid category.");
+    
+    ccState.category = topic;
     closeModals();
-    loadGames(); // loadGames now handles the branching logic
+
+    if (myRoomData.isOnline) {
+        socket.emit('start-game-request', {
+            roomId: myRoomData.roomId,
+            variant: currentVariant,
+            phase: gameState.phase,
+            limit: draftLimit,
+            categoryText: topic
+        });
+    } else {
+        loadGames();
+    }
 };
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -488,7 +572,10 @@ document.getElementById('play-online-btn').onclick = () => {
         return showModal("ACCESS DENIED", "Only the Room Leader can start the match!");
     }
 
-    if (amILeader) {
+    if (gameState.phase === 'category_clash') {
+        document.getElementById('modal-game-selection').style.display = 'none';
+        document.getElementById('modal-category-prompt').style.display = 'flex';
+    } else {
         socket.emit('start-game-request', {
             roomId: myRoomData.roomId,
             variant: currentVariant,
@@ -498,8 +585,23 @@ document.getElementById('play-online-btn').onclick = () => {
     }
 };
 
+function closeModalWithAnim(modalElement) {
+    if (!modalElement || modalElement.style.display === 'none' || modalElement.style.display === '') return;
+    const content = modalElement.querySelector('.modal-content');
+    if (content) {
+        content.classList.remove('animate-pop-in');
+        content.classList.add('animate-pop-out');
+        setTimeout(() => {
+            modalElement.style.display = 'none';
+            content.classList.remove('animate-pop-out');
+        }, 220);
+    } else {
+        modalElement.style.display = 'none';
+    }
+}
+
 function closeModals() {
-    document.querySelectorAll('.modal-overlay').forEach(m => m.style.display = 'none');
+    document.querySelectorAll('.modal-overlay').forEach(m => closeModalWithAnim(m));
 }
 
 
@@ -555,7 +657,7 @@ if (leaveGameBtn) {
 if (cancelLeaveBtn) {
     cancelLeaveBtn.onclick = () => {
         // Just hide the modal and go back to the game
-        leaveModal.style.display = 'none';
+        closeModalWithAnim(leaveModal);
     };
 }
 
@@ -628,13 +730,17 @@ function updateDraftHeader() {
         gameState.player2 = { rerolls: 2 };
     }
 
-    if (!myRoomData.isOnline) {
-        indicator.innerText = (gameState.turn === 'p1') ? `PLAYER 1: DRAFT ${draftLimit} GAMES` : `PLAYER 2: DRAFT ${draftLimit} GAMES`;
+    if (gameState.phase === 'category_clash') {
+        indicator.innerText = `CATEGORY: ${ccState.category ? ccState.category.toUpperCase() : ""}`;
     } else {
-        // Online: Each player is drafting simultaneously for the OTHER player
-        const targetRole = (myIdentity === 'p1') ? 'p2' : 'p1';
-        const targetName = getPlayerName(targetRole);
-        indicator.innerText = `DRAFTING FOR ${targetName}`;
+        if (!myRoomData.isOnline) {
+            indicator.innerText = (gameState.turn === 'p1') ? `PLAYER 1: DRAFT ${draftLimit} GAMES` : `PLAYER 2: DRAFT ${draftLimit} GAMES`;
+        } else {
+            // Online: Each player is drafting simultaneously for the OTHER player
+            const targetRole = (myIdentity === 'p1') ? 'p2' : 'p1';
+            const targetName = getPlayerName(targetRole);
+            indicator.innerText = `DRAFTING FOR ${targetName}`;
+        }
     }
 
     // In online mode, we are technically always using our own rerolls regardless of the 'global' turn
@@ -717,29 +823,121 @@ if (searchInput) {
     });
 }
 
+function renderCCDraftGrid() {
+    const lib = document.getElementById('game-library');
+    lib.innerHTML = '';
+    lib.style.display = 'flex';
+    lib.style.flexDirection = 'column';
+    lib.style.gap = '15px';
+    lib.style.width = '100%';
+    lib.style.maxWidth = '600px';
+
+    for(let i=0; i<5; i++) {
+        const slot = document.createElement('div');
+        slot.className = 'br-slot';
+        
+        const gameId = currentSelections[i];
+        if (gameId) {
+            const game = masterGameLibrary.find(g => g.id === gameId);
+            slot.innerHTML = `
+                <div class="br-slot-num">${i + 1}</div>
+                <div class="br-slot-content" style="cursor:pointer;" title="Click to remove">
+                    <img src="${game.background_image || ''}" style="height: 50px; width: auto; max-width: 80px; object-fit: cover; border-radius: 4px;">
+                    <span style="font-size: 14px; font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding-left: 10px; width: 100%; color:var(--text-main); text-align: left;">${game.name}</span>
+                </div>
+            `;
+            slot.onclick = () => {
+                currentSelections[i] = null;
+                const count = currentSelections.filter(x => x).length;
+                document.getElementById('counter').innerText = `SELECTED: ${count} / ${draftLimit}`;
+                document.getElementById('confirm-btn').disabled = (count !== draftLimit);
+                renderCCDraftGrid();
+            };
+            slot.style.border = '2px solid var(--accent)';
+        } else {
+            slot.innerHTML = `<div class="br-slot-num">${i + 1}</div><div class="br-slot-content" style="justify-content:center; color:#8a8d98; font-style:italic;">EMPTY</div>`;
+        }
+        lib.appendChild(slot);
+    }
+}
+
+function promptRankSelection(game) {
+    if (window.SFX) window.SFX.popup();
+    const modal = document.getElementById('modal-cc-rank-chooser');
+    if (!modal) return;
+    
+    document.getElementById('cc-rank-game-target').innerText = game.name;
+    const container = document.getElementById('cc-rank-buttons-container');
+    container.innerHTML = '';
+    
+    // Ensure array is size 5
+    while(currentSelections.length < 5) currentSelections.push(null);
+
+    for (let i = 0; i < 5; i++) {
+        const existingId = currentSelections[i];
+        let label = `PLACE IN RANK ${i + 1}`;
+        let btnCls = 'glow-btn';
+        if (existingId) {
+            const extGame = masterGameLibrary.find(g => g.id === existingId);
+            label = `REPLACE RANK ${i + 1} (${extGame ? extGame.name : 'Filled'})`;
+            btnCls = 'glow-btn cancel-btn'; 
+        }
+
+        const btn = document.createElement('button');
+        btn.className = btnCls;
+        btn.style.width = '100%';
+        btn.style.textAlign = 'left';
+        btn.style.marginBottom = '5px';
+        btn.innerText = label;
+
+        btn.onclick = () => {
+            currentSelections[i] = game.id; 
+            const count = currentSelections.filter(x => x).length;
+            document.getElementById('counter').innerText = `SELECTED: ${count} / ${draftLimit}`;
+            document.getElementById('confirm-btn').disabled = (count !== draftLimit);
+            modal.style.display = 'none';
+            renderCCDraftGrid();
+            if (window.SFX) window.SFX.click();
+        };
+        container.appendChild(btn);
+    }
+    
+    modal.style.display = 'flex';
+}
+
 function addGameFromSearch(game) {
     if (!masterGameLibrary.find(g => g.id === game.id)) masterGameLibrary.push(game);
     if (currentSelections.includes(game.id)) return showModal("ALREADY PICKED", "Game already in list.");
-    if (currentSelections.length >= draftLimit) return showModal("LIMIT REACHED", `You already have ${draftLimit} games!`);
 
-    currentSelections.push(game.id);
-    const card = document.createElement('div');
-    card.className = 'game-card selected';
-    card.innerHTML = `<img src="${game.background_image}"><h3>${game.name}</h3>`;
+    if (gameState.phase === 'category_clash') {
+        promptRankSelection(game);
+    } else {
+        if (currentSelections.length >= draftLimit) return showModal("LIMIT REACHED", `You already have ${draftLimit} games!`);
+        currentSelections.push(game.id);
+        document.getElementById('counter').innerText = `SELECTED: ${currentSelections.length} / ${draftLimit}`;
+        document.getElementById('confirm-btn').disabled = (currentSelections.length !== draftLimit);
+        const lib = document.getElementById('game-library');
+        lib.style.display = '';
+        lib.style.flexDirection = '';
+        lib.style.width = '';
+        lib.style.maxWidth = '';
+        
+        const card = document.createElement('div');
+        card.className = 'game-card selected';
+        card.innerHTML = `<img src="${game.background_image}"><h3>${game.name}</h3>`;
 
-    card.onclick = () => {
-        const idx = currentSelections.indexOf(game.id);
-        if (idx > -1) {
-            currentSelections.splice(idx, 1);
-            card.remove();
-            document.getElementById('counter').innerText = `SELECTED: ${currentSelections.length} / ${draftLimit}`;
-            document.getElementById('confirm-btn').disabled = (currentSelections.length !== draftLimit);
-        }
-    };
+        card.onclick = () => {
+            const idx = currentSelections.indexOf(game.id);
+            if (idx > -1) {
+                currentSelections.splice(idx, 1);
+                card.remove();
+                document.getElementById('counter').innerText = `SELECTED: ${currentSelections.length} / ${draftLimit}`;
+                document.getElementById('confirm-btn').disabled = (currentSelections.length !== draftLimit);
+            }
+        };
 
-    document.getElementById('game-library').appendChild(card);
-    document.getElementById('counter').innerText = `SELECTED: ${currentSelections.length} / ${draftLimit}`;
-    document.getElementById('confirm-btn').disabled = (currentSelections.length !== draftLimit);
+        document.getElementById('game-library').appendChild(card);
+    }
 }
 
 let isRevealing = false;
@@ -832,10 +1030,12 @@ function makeHLGuess(choice) {
 
     const nextCard = document.getElementById('hl-next-card');
     if (isCorrect) {
+        if (window.SFX) SFX.correct();
         nextCard.classList.add('correct');
         if (gameState.turn === 'p1') hlState.p1Score += 10;
         else hlState.p2Score += 10;
     } else {
+        if (window.SFX) SFX.incorrect();
         nextCard.classList.add('incorrect');
     }
 
@@ -849,7 +1049,8 @@ function makeHLGuess(choice) {
             score1: hlState.p1Score,
             score2: hlState.p2Score,
             nextYear: nextYear === 0 ? "N/A" : nextYear,
-            isCorrect: isCorrect
+            isCorrect: isCorrect,
+            guesser: myIdentity
         });
     }
 
@@ -906,6 +1107,8 @@ function setupBRGrids() {
             slot.onclick = () => {
                 if (myRoomData.isOnline && myIdentity !== p) return;
                 if (!myRoomData.isOnline && gameState.turn !== p) return;
+                
+                if (window.SFX) SFX.rank();
                 tryPlaceBRGame(p, i);
             };
 
@@ -1023,5 +1226,119 @@ function checkBRFinished() {
     if (p1Done && p2Done) {
         document.getElementById('br-current-status').innerText = "RANKING COMPLETE!";
         document.getElementById('br-active-reveal').innerHTML = '<h2 style="color:var(--neon-p1); font-family:var(--font-head); font-size: 32px; text-align:center; margin-top: 50px; text-shadow: 0 0 15px var(--neon-p1);">ALL DONE!</h2><button class="glow-btn pink" onclick="resetGameToMenu()" style="margin-top:20px;">BACK TO MENU</button>';
+    }
+}
+
+// --- CATEGORY CLASH LOGIC ---
+
+function startCategoryClashPhase() {
+    document.getElementById('draft-phase').style.display = 'none';
+    document.getElementById('cc-phase').style.display = 'block';
+    
+    const uiTitle = document.getElementById('cc-topic-title');
+    if (uiTitle && ccState.category) uiTitle.innerText = ccState.category.toUpperCase();
+    
+    setupCCGrids();
+    ccState.revealIndex = 4; // Start at bottom of list (rank 5)
+    ccState.revealTurn = 'p1';
+    
+    updateCCPlayerControls();
+    if (window.SFX) window.SFX.popup();
+}
+
+function setupCCGrids() {
+    ['p1', 'p2'].forEach(p => {
+        const slotsContainer = document.getElementById(`cc-${p}-slots`);
+        if (!slotsContainer) return;
+        slotsContainer.innerHTML = '';
+        
+        for (let i = 0; i < 5; i++) { 
+            const slot = document.createElement('div');
+            slot.className = 'br-slot cc-hidden-card';
+            slot.id = `cc-${p}-slot-${i}`;
+            
+            // Start Hidden
+            slot.innerHTML = `<div class="br-slot-num">${i + 1}</div><div class="br-slot-content" style="justify-content:center; color:#8a8d98; font-style:italic;">HIDDEN</div>`;
+            slotsContainer.appendChild(slot);
+        }
+    });
+}
+
+function updateCCPlayerControls() {
+    const isMyTurn = (!myRoomData.isOnline) ? true : (myIdentity === ccState.revealTurn);
+    const btn = document.getElementById('cc-reveal-btn');
+    const indicator = document.getElementById('cc-turn-indicator');
+    if (!btn || !indicator) return;
+    
+    if (ccState.revealIndex < 0) {
+        indicator.innerText = "ALL RANKS REVEALED!";
+        btn.style.display = 'none';
+        
+        if (!document.getElementById('cc-finish-btn')) {
+            const finishBtn = document.createElement('button');
+            finishBtn.id = 'cc-finish-btn';
+            finishBtn.className = 'glow-btn pink';
+            finishBtn.innerText = 'BACK TO MENU';
+            finishBtn.style.marginTop = '20px';
+            finishBtn.onclick = resetGameToMenu;
+            indicator.parentNode.appendChild(finishBtn);
+        }
+        return;
+    }
+    
+    const rankNum = ccState.revealIndex + 1;
+    const actorName = getPlayerName(ccState.revealTurn);
+    
+    if (isMyTurn) {
+        indicator.innerText = `YOUR TURN TO REVEAL RANK ${rankNum}`;
+        btn.style.display = 'block';
+        btn.innerText = `REVEAL RANK ${rankNum}`;
+        btn.onclick = () => {
+            btn.style.display = 'none'; 
+            
+            // In Category Clash, checking Local Data
+            // Draft phase stored P1 selections exactly like normal: 5 selections in order
+            const draftList = (ccState.revealTurn === 'p1') ? gameState.player1.draftedForP2 : gameState.player2.draftedForP1;
+            const gameId = draftList[ccState.revealIndex];
+            
+            if (myRoomData.isOnline) {
+                socket.emit('cc-reveal', {
+                    roomId: myRoomData.roomId,
+                    role: ccState.revealTurn,
+                    index: ccState.revealIndex,
+                    gameId: gameId
+                });
+            } else {
+                const game = masterGameLibrary.find(g => Number(g.id) === Number(gameId));
+                ccRevealGameVisual(ccState.revealTurn, ccState.revealIndex, game);
+                
+                if (ccState.revealTurn === 'p1') {
+                    ccState.revealTurn = 'p2';
+                } else {
+                    ccState.revealTurn = 'p1';
+                    ccState.revealIndex--;
+                }
+                updateCCPlayerControls();
+            }
+        };
+    } else {
+        indicator.innerText = `WAITING FOR ${actorName.toUpperCase()}...`;
+        btn.style.display = 'none';
+    }
+}
+
+function ccRevealGameVisual(role, idx, game) {
+    if (window.SFX) window.SFX.rank();
+    const slotEl = document.getElementById(`cc-${role}-slot-${idx}`);
+    if (slotEl && game) {
+        slotEl.style.animation = 'pop-in 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)';
+        slotEl.classList.remove('cc-hidden-card');
+        slotEl.style.backgroundColor = '#1a1c24';
+        slotEl.querySelector('.br-slot-content').innerHTML = `
+            <img src="${game.background_image || ''}" style="height: 50px; width: auto; max-width: 80px; object-fit: cover; border-radius: 4px;">
+            <span style="font-size: 14px; font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding-left: 10px; width: 100%; color:var(--text-main); text-align: left;">${game.name}</span>
+        `;
+        slotEl.style.border = role === 'p1' ? '2px solid var(--neon-p1)' : '2px solid var(--neon-p2)';
+        slotEl.style.boxShadow = role === 'p1' ? '0 0 10px rgba(0, 240, 255, 0.5)' : '0 0 10px rgba(255, 0, 255, 0.5)';
     }
 }

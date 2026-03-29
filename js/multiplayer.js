@@ -24,6 +24,7 @@ function connectMultiplayer() {
 
     // When YOU create a room
     socket.on('room-created', (data) => {
+        if (window.SFX) SFX.roomCreate();
         myIdentity = 'p1';
         amILeader = true;
         myRoomData.roomId = data.roomId;
@@ -42,6 +43,12 @@ function connectMultiplayer() {
 
     // --- NEW: Universal Room Updater (Handles Joins, Leaves, Kicks, Leadership changes) ---
     socket.on('room-updated', (data) => {
+        // Detect Joins and Leaves
+        const isJoin = data.players.length > myRoomData.players.length;
+        const isLeave = data.players.length < myRoomData.players.length;
+        if (isJoin && window.SFX) SFX.playerJoin();
+        if (isLeave && window.SFX) SFX.playerLeave();
+
         myRoomData.players = data.players;
         myRoomData.roomId = data.roomId;
 
@@ -77,8 +84,9 @@ function connectMultiplayer() {
     socket.on('init-online-game', (data) => {
         closeModals();
         currentVariant = data.variant;
-        gameState.phase = data.phase; // higher_lower, drafting, blind_ranking
+        gameState.phase = data.phase; // higher_lower, drafting, blind_ranking, category_clash
         if (data.limit) draftLimit = data.limit;
+        if (data.categoryText) ccState.category = data.categoryText;
         
         currentSelections = []; // Guaranteed clean state for draft arrays
         if (typeof isGuestWaiting !== 'undefined') isGuestWaiting = false;
@@ -176,12 +184,23 @@ function connectMultiplayer() {
             badge.classList.remove('hidden');
         }
 
-        document.getElementById('hl-next-card').classList.add(data.isCorrect ? 'correct' : 'incorrect');
+        const hlnc = document.getElementById('hl-next-card');
+        hlnc.classList.add(data.isCorrect ? 'correct' : 'incorrect');
 
-        // Only the spectator moves to the next round (the player triggers it themselves)
-        if (myIdentity !== gameState.turn) {
-            setTimeout(() => proceedHL(), 2000);
+        // Only play SFX if it was NOT our turn (we already played it in makeHLGuess)
+        if (myIdentity !== gameState.turn && window.SFX) {
+            if (data.isCorrect) SFX.correct();
+            else SFX.incorrect();
         }
+
+        setTimeout(() => {
+            hlnc.classList.remove('correct', 'incorrect');
+            badge.classList.add('hidden');
+            // Only the spectator moves to the next round (the player triggers it themselves)
+            if (data.guesser && myIdentity !== data.guesser) {
+                proceedHL();
+            }
+        }, 2000);
     });
 
     socket.on('update-draft-status', (players) => {
@@ -222,6 +241,8 @@ function connectMultiplayer() {
 
         if (gameState.phase === 'blind_ranking') {
             startBlindRankingPhase();
+        } else if (gameState.phase === 'category_clash') {
+            startCategoryClashPhase();
         } else {
             gameState.phase = "keep_kill";
             startKeepKillPhase();
@@ -242,6 +263,25 @@ function connectMultiplayer() {
     socket.on('opponent-revealed', (game) => { if (myRoomData.isOnline) startDecisionTurn(game); });
     socket.on('opponent-decided', (data) => { if (myRoomData.isOnline) handleChoice(data.choice, data.game); });
     socket.on('error', (msg) => showModal("SERVER ERROR", msg));
+    
+    // CATEGORY CLASH LOGIC
+    socket.on('cc-reveal-sync', (data) => {
+        // Find game object based on id
+        const game = masterGameLibrary.find(g => Number(g.id) === Number(data.gameId));
+        if (!game) return;
+
+        // Visual unflip
+        ccRevealGameVisual(data.role, data.index, game);
+
+        // Turn logic
+        if (data.role === 'p1') {
+            ccState.revealTurn = 'p2';
+        } else {
+            ccState.revealTurn = 'p1';
+            ccState.revealIndex--;
+        }
+        updateCCPlayerControls();
+    });
 }
 
 // --- LOBBY UI RENDERING ---

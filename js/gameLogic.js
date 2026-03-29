@@ -17,6 +17,12 @@ let brState = {
     p1CurrentGame: null, p2CurrentGame: null
 };
 
+let ccState = {
+    category: "",
+    revealTurn: "p1",
+    revealIndex: 4 // 4 to 0 (Rank 5 to Rank 1)
+};
+
 let draftLimit = 10;
 let currentSelections = [];
 
@@ -105,6 +111,8 @@ function handleConfirm() {
             gameState.player2.draftedForP1 = [...currentSelections];
             if (gameState.phase === 'blind_ranking') {
                 startBlindRankingPhase();
+            } else if (gameState.phase === 'category_clash') {
+                startCategoryClashPhase();
             } else {
                 startKeepKillPhase();
             }

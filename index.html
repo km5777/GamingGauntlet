@@ -68,7 +68,15 @@
                 <div class="mode-icon">👀</div>
                 <div class="mode-info">
                     <h3>BLIND RANKING</h3>
-                    <p>Search games for your friend, and they must blindly assign them ranks without knowing what comes next!</p>
+                    <p>Search games for your friend, and they must blindly assign them ranks without knowing what comes
+                        next!</p>
+                </div>
+            </div>
+            <div class="mode-card" id="mode-category-clash" style="margin-top:15px;">
+                <div class="mode-icon">🏆</div>
+                <div class="mode-info">
+                    <h3>CATEGORY CLASH</h3>
+                    <p>Create a custom prompt, pick 5 games, and reveal them one by one!</p>
                 </div>
             </div>
             <div id="sub-mode-selection" style="display:none; margin-top:20px;">
@@ -97,6 +105,35 @@
                 </div>
             </div>
             <button onclick="closeModals()" class="close-x">BACK</button>
+        </div>
+    </div>
+
+    <!-- CATEGORY PROMPT MODAL -->
+    <div id="modal-category-prompt" class="modal-overlay" style="display: none;">
+        <div class="modal-content">
+            <h2>CUSTOMIZE PROMPT</h2>
+            <p style="color:var(--text-dim); margin-bottom: 20px;">Provide a specific category (e.g., "Best RPGs of all
+                time"). Both players will secretly rank their top 5 games.</p>
+            <input type="text" id="cc-category-input" placeholder="ENTER A CATEGORY"
+                style="margin-bottom: 15px; width: 100%; text-align: center;">
+            <div class="room-actions">
+                <button id="cc-confirm-setup-btn" class="glow-btn pink">CONFIRM</button>
+                <button onclick="closeModals()" class="glow-btn">CANCEL</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- CC RANK CHOOSER MODAL -->
+    <div id="modal-cc-rank-chooser" class="modal-overlay" style="display: none; z-index: 2000;">
+        <div class="modal-content">
+            <h2>SELECT RANK</h2>
+            <p id="cc-rank-game-target"
+                style="color:var(--accent); font-weight:800; font-size:18px; margin-bottom: 15px;"></p>
+            <div id="cc-rank-buttons-container" style="display: flex; flex-direction: column; gap: 10px;">
+                <!-- Dynamically filled by JS -->
+            </div>
+            <button onclick="document.getElementById('modal-cc-rank-chooser').style.display = 'none';"
+                class="glow-btn cancel-btn" style="margin-top: 15px; width: 100%;">CANCEL</button>
         </div>
     </div>
 
@@ -184,7 +221,7 @@
             </div>
             <div id="search-container"
                 style="display: none; width: 100%; max-width: 600px; margin: 20px auto; position: relative; z-index: 1100; padding: 0 20px;">
-                <input type="text" id="game-search-input" placeholder="SEARCH FOR A GAME TO SABOTAGE...">
+                <input type="text" id="game-search-input" placeholder="SEARCH FOR A GAME...">
                 <div id="search-results-dropdown" class="search-results-box"></div>
             </div>
             <div class="grid-wrapper">
@@ -266,8 +303,9 @@
         <div id="br-phase" class="full-page" style="display: none;">
             <div class="ui-header" style="display: none;">
             </div>
-            
-            <div class="centered-grid" style="align-items: flex-start; width: 100%; max-width: 1400px; padding: 20px; gap: 40px;">
+
+            <div class="centered-grid"
+                style="align-items: flex-start; width: 100%; max-width: 1400px; padding: 20px; gap: 40px;">
                 <!-- P1 Ranking List -->
                 <div class="br-list" id="br-p1-list" style="flex: 1; min-width: 250px;">
                     <h3 id="br-p1-title" class="neon-text" style="font-size:18px;">P1 RANKING</h3>
@@ -275,9 +313,12 @@
                 </div>
 
                 <!-- Active Game Reveal Area -->
-                <div id="br-active-reveal" style="flex: 1; min-width: 300px; display:flex; flex-direction:column; align-items:center;">
-                    <h2 id="br-current-status" style="font-family:var(--font-head); color:white; font-size: 18px;">YOUR NEXT GAME TO RANK:</h2>
-                    <div class="game-card" id="br-active-card" style="width:250px; margin: 20px 0; border: 2px solid var(--accent); box-shadow: 0 0 20px var(--accent-glow);">
+                <div id="br-active-reveal"
+                    style="flex: 1; min-width: 300px; display:flex; flex-direction:column; align-items:center;">
+                    <h2 id="br-current-status" style="font-family:var(--font-head); color:white; font-size: 18px;">YOUR
+                        NEXT GAME TO RANK:</h2>
+                    <div class="game-card" id="br-active-card"
+                        style="width:250px; margin: 20px 0; border: 2px solid var(--accent); box-shadow: 0 0 20px var(--accent-glow);">
                         <img id="br-active-img" src="" style="height:300px;">
                         <h3 id="br-active-name" style="white-space: normal;">...</h3>
                     </div>
@@ -290,6 +331,32 @@
                 </div>
             </div>
         </div>
+    </div>
+
+    <!-- CATEGORY CLASH PHASE -->
+    <div id="cc-phase" class="full-page" style="display: none;">
+        <div class="ui-header" style="flex-direction: column; align-items: center; justify-content: center;">
+            <h2 id="cc-topic-title" class="neon-text" style="font-size: 32px; text-align: center; letter-spacing: 2px;">
+            </h2>
+            <h3 id="cc-turn-indicator" style="color: var(--text-dim); margin-top: 10px;">Waiting...</h3>
+            <button id="cc-reveal-btn" class="glow-btn pink" style="display: none; margin-top: 15px;">REVEAL RANK
+                5</button>
+        </div>
+
+        <div class="cc-board"
+            style="display:flex; flex-direction:row; width:100%; max-width:1200px; margin: 0 auto; gap: 40px; padding: 20px;">
+            <div class="cc-player-column" style="flex: 1; display:flex; flex-direction:column;">
+                <h3 id="cc-p1-header" style="text-align:center; color: #fff; margin-bottom: 15px;">PLAYER 1</h3>
+                <div id="cc-p1-slots" class="cc-slots-container" style="display:flex; flex-direction:column; gap:15px;">
+                </div>
+            </div>
+            <div class="cc-player-column" style="flex: 1; display:flex; flex-direction:column;">
+                <h3 id="cc-p2-header" style="text-align:center; color: #fff; margin-bottom: 15px;">PLAYER 2</h3>
+                <div id="cc-p2-slots" class="cc-slots-container" style="display:flex; flex-direction:column; gap:15px;">
+                </div>
+            </div>
+        </div>
+    </div>
 
     </div>
 
@@ -316,6 +383,7 @@
     </div>
 
     <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <script src="js/sfx.js"></script>
 
     <!-- 2. The game data -->
     <script src="js/games.js"></script>

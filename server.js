@@ -104,7 +104,8 @@ io.on('connection', (socket) => {
             io.to(data.roomId).emit('init-online-game', {
                 variant: data.variant,
                 phase: data.phase,
-                limit: data.limit
+                limit: data.limit,
+                categoryText: data.categoryText
             });
         }
     });
@@ -154,6 +155,11 @@ io.on('connection', (socket) => {
 
     socket.on('br-place-game', (data) => {
         socket.to(data.roomId).emit('br-opponent-placed', data);
+    });
+
+    // --- CATEGORY CLASH RELAYS ---
+    socket.on('cc-reveal', (data) => {
+        io.to(data.roomId).emit('cc-reveal-sync', data);
     });
 
     socket.on('kick-player', (data) => {
