@@ -178,6 +178,12 @@ function connectMultiplayer() {
             if (typeof data.p1Score !== 'undefined') hlState.p1Score = data.p1Score;
             if (typeof data.p2Score !== 'undefined') hlState.p2Score = data.p2Score;
             
+            if (data.isGameOver) {
+                const winner = (data.p1Score > data.p2Score) ? getPlayerName('p1') : getPlayerName('p2');
+                showModal("GAME OVER", `${winner} WINS!`);
+                resetGameToMenu();
+                return;
+            }
             setupHLRound();
         } else {
             // Leader just syncs the turn to avoid any potential visual mismatches
@@ -323,7 +329,16 @@ function connectMultiplayer() {
         }
     });
 
-    socket.on('opponent-revealed', (game) => { if (myRoomData.isOnline) startDecisionTurn(game); });
+    socket.on('opponent-revealed', (game) => { 
+        if (myRoomData.isOnline) {
+            // SYNC the local list by removing the revealed game so it stays consistent for YOUR turn next
+            let list = (gameState.turn === 'p1') ? gameState.player1.draftedForP2 : gameState.player2.draftedForP1;
+            const idx = list.indexOf(Number(game.id));
+            if (idx > -1) list.splice(idx, 1);
+            
+            startDecisionTurn(game); 
+        }
+    });
     socket.on('opponent-decided', (data) => { if (myRoomData.isOnline) handleChoice(data.choice, data.game); });
     socket.on('error', (msg) => showModal("SERVER ERROR", msg));
     

@@ -45,92 +45,124 @@
         </div>
     </div>
 
-    <!-- GAME SELECTION MODAL -->
+    <!-- UPDATED GAME SELECTION MODAL -->
     <div id="modal-game-selection" class="modal-overlay" style="display: none;">
         <div class="modal-content wide">
-            <h2>SELECT MODE</h2>
-            <div class="mode-card" id="mode-keep-kill">
-                <div class="mode-icon">⚔️</div>
-                <div class="mode-info">
-                    <h3>KEEP 5 / KILL 5</h3>
-                    <p>You and your friend draft 10 games. Then you have to decide which ones will stay and which ones
-                        will not.</p>
+            <h2 id="gauntlet-modal-title" class="neon-text" style="margin-bottom: 30px;">SELECT CHALLENGE</h2>
+
+            <!-- STEP 1: MODE GRID -->
+            <div id="step-mode-selection" class="selection-step">
+                <div class="modes-grid">
+                    <div class="mode-card small" id="mode-keep-kill">
+                        <div class="mode-icon">⚔️</div>
+                        <div class="mode-info">
+                            <h3>KEEP / KILL</h3>
+                            <p>Draft 10 games together</p>
+                        </div>
+                    </div>
+                    <div class="mode-card small" id="mode-higher-lower">
+                        <div class="mode-icon">📅</div>
+                        <div class="mode-info">
+                            <h3>HI-LO</h3>
+                            <p>Guessing release years</p>
+                        </div>
+                    </div>
+                    <div class="mode-card small" id="mode-blind-ranking">
+                        <div class="mode-icon">👀</div>
+                        <div class="mode-info">
+                            <h3>BLIND RANK</h3>
+                            <p>Rank games blindly</p>
+                        </div>
+                    </div>
+                    <div class="mode-card small" id="mode-category-clash">
+                        <div class="mode-icon">🏆</div>
+                        <div class="mode-info">
+                            <h3>CAT. CLASH</h3>
+                            <p>1v1 in your category</p>
+                        </div>
+                    </div>
+                    <div class="mode-card small" id="mode-keep-cut-upgrade">
+                        <div class="mode-icon">⚡</div>
+                        <div class="mode-info">
+                            <h3>TRINITY</h3>
+                            <p>Keep, Cut, or Upgrade</p>
+                        </div>
+                    </div>
+                    <div class="mode-card small" id="mode-oup">
+                        <div class="mode-icon">⚖️</div>
+                        <div class="mode-info">
+                            <h3>SCALES</h3>
+                            <p>Over/Under/Perfect</p>
+                        </div>
+                    </div>
+                    <div class="mode-card small" id="mode-price-paradox">
+                        <div class="mode-icon">💰</div>
+                        <div class="mode-info">
+                            <h3>PARADOX</h3>
+                            <p>Buy, Sale, or Skip</p>
+                        </div>
+                    </div>
                 </div>
-            </div>
-            <div class="mode-card" id="mode-higher-lower" style="margin-top:15px;">
-                <div class="mode-icon">📅</div>
-                <div class="mode-info">
-                    <h3>HIGHER / LOWER</h3>
-                    <p>Guess if the next game was released BEFORE or AFTER the current one.</p>
-                </div>
-            </div>
-            <div class="mode-card" id="mode-blind-ranking" style="margin-top:15px;">
-                <div class="mode-icon">👀</div>
-                <div class="mode-info">
-                    <h3>BLIND RANKING</h3>
-                    <p>Search games for your friend, and they must blindly assign them ranks without knowing what comes
-                        next!</p>
-                </div>
-            </div>
-            <div class="mode-card" id="mode-category-clash" style="margin-top:15px;">
-                <div class="mode-icon">🏆</div>
-                <div class="mode-info">
-                    <h3>CATEGORY CLASH</h3>
-                    <p>Create a custom prompt, pick 5 games, and reveal them one by one!</p>
-                </div>
-            </div>
-            <div class="mode-card" id="mode-keep-cut-upgrade" style="margin-top:15px;">
-                <div class="mode-icon">⚡</div>
-                <div class="mode-info">
-                    <h3>THE TRINITY VERDICT</h3>
-                    <p>Draft 3 games for your friend. They must Keep one, Cut one, and Upgrade one!</p>
-                </div>
-            </div>
-            <div class="mode-card" id="mode-oup" style="margin-top:15px;">
-                <div class="mode-icon">⚖️</div>
-                <div class="mode-info">
-                    <h3>THE RATING SCALES</h3>
-                    <p>Overrated, Underrated, or Perfectly Rated? Draft 5 games each and judge them live!</p>
-                </div>
-            </div>
-            <div class="mode-card" id="mode-price-paradox" style="margin-top:15px;">
-                <div class="mode-icon">💰</div>
-                <div class="mode-info">
-                    <h3>THE PRICE PARADOX</h3>
-                    <p>Buy, Wait for Sale, or Skip? Draft 3 games for your friend and see their valuation!</p>
-                </div>
-            </div>
-            
-            <div id="sub-mode-selection" style="display:none; margin-top:20px;">
-                <button id="play-local-btn" class="glow-btn">PLAY LOCAL</button>
-                <button id="play-online-btn" class="glow-btn pink">PLAY ONLINE</button>
             </div>
 
-            <button onclick="closeModals()" class="close-x">BACK</button>
-        </div>
-    </div>
-    <div id="modal-variant-selection" class="modal-overlay" style="display: none;">
-        <div class="modal-content wide">
-            <h2>PICK YOUR POISON</h2>
-            <div class="mode-card" id="variant-random">
-                <div class="mode-icon">🎲</div>
-                <div class="mode-info">
-                    <h3>RANDOM ARENA</h3>
-                    <p>Both players get a random pool of famous games to draft from.</p>
+            <!-- STEP 2: PRICE PARADOX VARIANTS -->
+            <div id="step-pp-variants" class="selection-step" style="display:none;">
+                <div class="modes-grid tiny">
+                    <div class="mode-card small" id="pp-variant-tactical">
+                        <div class="mode-icon">⚔️</div>
+                        <div class="mode-info"><h3>TACTICAL</h3><p>Draft 3 games</p></div>
+                    </div>
+                    <div class="mode-card small" id="pp-variant-global">
+                        <div class="mode-icon">🌎</div>
+                        <div class="mode-info"><h3>GLOBAL</h3><p>Judge 10 random</p></div>
+                    </div>
                 </div>
             </div>
-            <div class="mode-card" id="variant-search" style="margin-top:15px;">
-                <div class="mode-icon">🔍</div>
-                <div class="mode-info">
-                    <h3>SEARCH MODE</h3>
-                    <p>Search all 500,000+ games to pick specific games for your friend.</p>
+
+            <!-- STEP 3: DRAFT VARIANTS -->
+            <div id="step-draft-variants" class="selection-step" style="display:none;">
+                <div class="modes-grid tiny">
+                    <div class="mode-card small" id="variant-random">
+                        <div class="mode-icon">🎲</div>
+                        <div class="mode-info"><h3>RANDOM POOL</h3><p>Pick from 100 top games</p></div>
+                    </div>
+                    <div class="mode-card small" id="variant-search">
+                        <div class="mode-icon">🔍</div>
+                        <div class="mode-info"><h3>SEARCH</h3><p>Find any game in RAWG</p></div>
+                    </div>
                 </div>
             </div>
-            <button onclick="closeModals()" class="close-x">BACK</button>
+
+            <!-- STEP 4: BLIND RANKING LIMITS -->
+            <div id="step-br-limits" class="selection-step" style="display:none;">
+                <div class="modes-grid tiny">
+                    <div class="mode-card small" id="br-limit-5">
+                        <div class="mode-icon">5️⃣</div>
+                        <div class="mode-info"><h3>5 GAMES</h3></div>
+                    </div>
+                    <div class="mode-card small" id="br-limit-10">
+                        <div class="mode-icon">🔟</div>
+                        <div class="mode-info"><h3>10 GAMES</h3></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- STEP 5: PLAY OPTIONS -->
+            <div id="step-play-options" class="selection-step" style="display:none;">
+                <div style="display:flex; gap: 20px; justify-content:center; padding: 40px 0;">
+                    <button id="play-local-btn" class="glow-btn" style="width:200px;">LOCAL PLAY</button>
+                    <button id="play-online-btn" class="glow-btn pink" style="width:200px;">ONLINE LOBBY</button>
+                </div>
+            </div>
+
+            <div class="modal-footer" style="margin-top: 40px; display:flex; justify-content:center; gap: 20px; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 25px;">
+                <button id="gauntlet-back-btn" class="glow-btn" style="display:none; min-width: 120px;">BACK</button>
+                <button onclick="closeModals()" class="glow-btn cancel-btn" style="min-width: 120px;">CLOSE</button>
+            </div>
         </div>
     </div>
 
-    <!-- CATEGORY PROMPT MODAL -->
+    <!-- CATEGORY PROMPT MODAL (Now integrated but kept as fallback or separate for complexity) -->
     <div id="modal-category-prompt" class="modal-overlay" style="display: none;">
         <div class="modal-content">
             <h2>CUSTOMIZE PROMPT</h2>
@@ -156,28 +188,6 @@
             </div>
             <button onclick="document.getElementById('modal-cc-rank-chooser').style.display = 'none';"
                 class="glow-btn cancel-btn" style="margin-top: 15px; width: 100%;">CANCEL</button>
-        </div>
-    </div>
-
-    <!-- ROOM MANAGEMENT MODAL -->
-    <div id="modal-br-limits" class="modal-overlay" style="display: none;">
-        <div class="modal-content wide">
-            <h2>SELECT GAME COUNT</h2>
-            <div class="mode-card" id="br-limit-5">
-                <div class="mode-icon">5️⃣</div>
-                <div class="mode-info">
-                    <h3>RANK 5 GAMES</h3>
-                    <p>Each player selects 5 games for their opponent to rank.</p>
-                </div>
-            </div>
-            <div class="mode-card" id="br-limit-10" style="margin-top:15px;">
-                <div class="mode-icon">🔟</div>
-                <div class="mode-info">
-                    <h3>RANK 10 GAMES</h3>
-                    <p>Each player selects 10 games for their opponent to rank.</p>
-                </div>
-            </div>
-            <button onclick="closeModals()" class="close-x">BACK</button>
         </div>
     </div>
 

@@ -426,6 +426,8 @@ document.getElementById('confirm-btn').onclick = handleConfirm;
 document.getElementById('open-games-btn').onclick = () => {
     if (window.SFX) SFX.openUI();
     document.getElementById('modal-game-selection').style.display = 'flex';
+    document.getElementById('modes-grid').style.display = 'block';
+    document.getElementById('sub-mode-selection').style.display = 'none';
 };
 
 document.getElementById('open-online-btn').onclick = () => {
@@ -449,110 +451,132 @@ function setActiveMode(activeId) {
     });
 }
 
+// --- NEW GAME SELECTION NAVIGATION LOGIC ---
+let selectionHistory = [];
+
+function showSelectionStep(stepId, title) {
+    document.querySelectorAll(".selection-step").forEach(s => s.style.display = "none");
+    const targetStep = document.getElementById(stepId);
+    if(targetStep) targetStep.style.display = "block";
+
+    const titleEl = document.getElementById("gauntlet-modal-title");
+    if(titleEl && title) titleEl.innerText = title;
+
+    const backBtn = document.getElementById("gauntlet-back-btn");
+    if (stepId === "step-mode-selection") {
+        selectionHistory = [];
+        if(backBtn) backBtn.style.display = "none";
+        if(titleEl) titleEl.innerText = "SELECT CHALLENGE";
+    } else {
+        if(backBtn) backBtn.style.display = "block";
+        if (!selectionHistory.includes(stepId)) {
+            selectionHistory.push(stepId);
+        }
+    }
+}
+
+const gauntletBackBtn = document.getElementById("gauntlet-back-btn");
+if(gauntletBackBtn) {
+    gauntletBackBtn.onclick = () => {
+        if (window.SFX) window.SFX.click();
+        selectionHistory.pop();
+        const prevStep = selectionHistory[selectionHistory.length - 1] || "step-mode-selection";
+        let prevTitle = "SELECT CHALLENGE";
+        if (prevStep === "step-pp-variants") prevTitle = "PRICE PARADOX";
+        if (prevStep === "step-draft-variants") prevTitle = "PICK YOUR POISON";
+        if (prevStep === "step-br-limits") prevTitle = "RANKING LIMITS";
+        showSelectionStep(prevStep, prevTitle);
+    };
+}
+
+document.getElementById('open-games-btn').onclick = () => {
+    if (window.SFX) SFX.openUI();
+    document.getElementById('modal-game-selection').style.display = 'flex';
+    showSelectionStep("step-mode-selection");
+};
+
 document.getElementById('mode-keep-kill').onclick = () => {
-    if (window.SFX) SFX.openUI();
+    if (window.SFX) SFX.click();
     gameState.phase = "drafting";
-    draftLimit = 10; // Default for keep/kill
+    draftLimit = 10;
     setActiveMode('mode-keep-kill');
-
-    document.getElementById('modal-game-selection').style.display = 'none';
-    document.getElementById('modal-variant-selection').style.display = 'flex';
+    showSelectionStep("step-draft-variants", "PICK YOUR POISON");
 };
-
-
-
 document.getElementById('variant-random').onclick = () => {
-    if (window.SFX) SFX.openUI();
+    if (window.SFX) SFX.click();
     currentVariant = 'random';
-    document.getElementById('modal-variant-selection').style.display = 'none';
-    document.getElementById('modal-br-limits').style.display = 'none';
-    document.getElementById('modal-game-selection').style.display = 'flex';
-    document.getElementById('sub-mode-selection').style.display = 'block';
+    showSelectionStep("step-play-options", "CHOOSE ARENA");
 };
 
+// Must be lowercase 'search'
 document.getElementById('variant-search').onclick = () => {
-    if (window.SFX) SFX.openUI();
-    currentVariant = 'search'; // Must be lowercase 'search'
-    document.getElementById('modal-variant-selection').style.display = 'none';
-    document.getElementById('modal-br-limits').style.display = 'none';
-    document.getElementById('modal-game-selection').style.display = 'flex';
-    document.getElementById('sub-mode-selection').style.display = 'block';
+    if (window.SFX) SFX.click();
+    currentVariant = 'search'; 
+    showSelectionStep("step-play-options", "CHOOSE ARENA");
 };
 
 document.getElementById('mode-higher-lower').onclick = () => {
-    if (window.SFX) SFX.openUI();
+    if (window.SFX) SFX.click();
     gameState.phase = "higher_lower";
     currentVariant = 'random';
     setActiveMode('mode-higher-lower');
-
-    // Higher lower doesn't need to ask for search vs random or limits, it just unlocks play buttons
-    document.getElementById('sub-mode-selection').style.display = 'block';
+    showSelectionStep("step-play-options", "HIGHER / LOWER");
 };
 
 const brModeBtn = document.getElementById('mode-blind-ranking');
 if (brModeBtn) {
     brModeBtn.onclick = () => {
-        if (window.SFX) SFX.openUI();
+        if (window.SFX) SFX.click();
         gameState.phase = "blind_ranking";
-        currentVariant = 'search'; // Force search variant for Blind Ranking
-        
+        currentVariant = 'search'; 
         setActiveMode('mode-blind-ranking');
-        
-        document.getElementById('modal-game-selection').style.display = 'none';
-        document.getElementById('modal-br-limits').style.display = 'flex';
+        showSelectionStep("step-br-limits", "RANKING LIMITS");
     };
 }
 
 const ccModeBtn = document.getElementById('mode-category-clash');
 if (ccModeBtn) {
     ccModeBtn.onclick = () => {
-        if (window.SFX) SFX.openUI();
+        if (window.SFX) SFX.click();
         gameState.phase = "category_clash";
         currentVariant = 'search'; 
         draftLimit = 5;
-        
         setActiveMode('mode-category-clash');
-        
-        document.getElementById('sub-mode-selection').style.display = 'block';
+        showSelectionStep("step-play-options", "CATEGORY CLASH");
     };
 }
 
 const kcuModeBtn = document.getElementById('mode-keep-cut-upgrade');
 if (kcuModeBtn) {
     kcuModeBtn.onclick = () => {
-        if (window.SFX) SFX.openUI();
+        if (window.SFX) SFX.click();
         gameState.phase = "keep_cut_upgrade";
         currentVariant = 'search'; 
-        draftLimit = 3; // EXACTLY 3 games
-        
+        draftLimit = 3; 
         setActiveMode('mode-keep-cut-upgrade');
-        
-        document.getElementById('sub-mode-selection').style.display = 'block';
+        showSelectionStep("step-play-options", "THE TRINITY VERDICT");
     };
 }
 
 const oupModeBtn = document.getElementById('mode-oup');
 if (oupModeBtn) {
     oupModeBtn.onclick = () => {
-        if (window.SFX) SFX.openUI();
+        if (window.SFX) SFX.click();
         gameState.phase = "oup";
         currentVariant = 'search'; 
-        draftLimit = 5; // EXACTLY 5 games
-        
+        draftLimit = 5; 
         setActiveMode('mode-oup');
-        
-        document.getElementById('sub-mode-selection').style.display = 'block';
+        showSelectionStep("step-play-options", "THE RATING SCALES");
     };
 }
 
 const ppModeBtn = document.getElementById('mode-price-paradox');
 if (ppModeBtn) {
     ppModeBtn.onclick = () => {
-        if (window.SFX) SFX.openUI();
+        if (window.SFX) SFX.click();
         gameState.phase = "price_paradox";
         setActiveMode('mode-price-paradox');
-        document.getElementById('modal-game-selection').style.display = 'none';
-        document.getElementById('modal-pp-variant-selection').style.display = 'flex';
+        showSelectionStep("step-pp-variants", "PRICE PARADOX");
     };
 }
 
@@ -563,8 +587,7 @@ if (ppTacticalBtn) {
         currentVariant = 'search'; 
         draftLimit = 3;
         ppGlobalMode = false;
-        document.getElementById('modal-pp-variant-selection').style.display = 'none';
-        document.getElementById('modal-variant-selection').style.display = 'flex';
+        showSelectionStep("step-play-options", "THE PRICE PARADOX");
     };
 }
 
@@ -575,29 +598,25 @@ if (ppGlobalBtn) {
         currentVariant = 'random_10'; 
         draftLimit = 0; 
         ppGlobalMode = true;
-        document.getElementById('modal-pp-variant-selection').style.display = 'none';
-        document.getElementById('modal-game-selection').style.display = 'flex';
-        document.getElementById('sub-mode-selection').style.display = 'block';
+        showSelectionStep("step-play-options", "GLOBAL PARADOX");
     };
 }
 
 const brLimit5Btn = document.getElementById('br-limit-5');
 if (brLimit5Btn) {
     brLimit5Btn.onclick = () => {
+        if (window.SFX) SFX.click();
         draftLimit = 5;
-        document.getElementById('modal-br-limits').style.display = 'none';
-        document.getElementById('modal-game-selection').style.display = 'flex';
-        document.getElementById('sub-mode-selection').style.display = 'block';
+        showSelectionStep("step-play-options", "BLIND RANKING");
     };
 }
 
 const brLimit10Btn = document.getElementById('br-limit-10');
 if (brLimit10Btn) {
     brLimit10Btn.onclick = () => {
+        if (window.SFX) SFX.click();
         draftLimit = 10;
-        document.getElementById('modal-br-limits').style.display = 'none';
-        document.getElementById('modal-game-selection').style.display = 'flex';
-        document.getElementById('sub-mode-selection').style.display = 'block';
+        showSelectionStep("step-play-options", "BLIND RANKING");
     };
 }
 
@@ -677,6 +696,7 @@ function closeModalWithAnim(modalElement) {
 
 function closeModals() {
     document.querySelectorAll('.modal-overlay').forEach(m => closeModalWithAnim(m));
+    selectionHistory = []; // Reset when closing
 }
 
 
@@ -853,7 +873,7 @@ if (searchInput) {
         resultsBox.style.display = 'block';
         resultsBox.innerHTML = '<div style="padding:15px; color:#8a8d98; font-size:12px;">SEARCHING...</div>';
 
-        // Wait 250ms after the user stops typing to call the API
+        // Wait 50ms after the user stops typing to call the API (ultra-fast)
         searchTimeout = setTimeout(async () => {
             const results = await searchRAWG(query);
 
@@ -1711,17 +1731,17 @@ function renderOUPBoard() {
 
     let isMyTurn = !myRoomData.isOnline || myIdentity === activeJudge;
 
+    // Simplified: Reset listeners once, then assign if it's my turn
     [btnU, btnP, btnO].forEach(btn => {
         btn.style.opacity = isMyTurn ? '1' : '0.5';
         btn.style.cursor = isMyTurn ? 'pointer' : 'not-allowed';
-        const newBtn = btn.cloneNode(true);
-        btn.parentNode.replaceChild(newBtn, btn);
+        btn.onclick = null; 
     });
-
+    
     if (isMyTurn) {
-        document.getElementById('oup-btn-underrated').onclick = () => assignOUPFate('underrated');
-        document.getElementById('oup-btn-perfect').onclick = () => assignOUPFate('perfect');
-        document.getElementById('oup-btn-overrated').onclick = () => assignOUPFate('overrated');
+        btnU.onclick = () => assignOUPFate('underrated');
+        btnP.onclick = () => assignOUPFate('perfect');
+        btnO.onclick = () => assignOUPFate('overrated');
     }
 }
 
@@ -1897,6 +1917,12 @@ function startPPRandomPhase() {
     ppRandomIndex = 0;
     ppDecisions = { p1: null, p2: null };
     
+    // Clear any leftover summary elements to avoid UI stacking
+    const sumDiv = document.getElementById("pp-summary-div");
+    if(sumDiv) sumDiv.style.display = "none";
+    document.getElementById("pp-active-card").style.display = "flex";
+    document.getElementById("pp-controls").style.display = "flex";
+
     // Pick 10 random games from library for both
     if (!myRoomData.isOnline || amILeader) {
         ppRandomGames = shuffleArray([...masterGameLibrary]).slice(0, 10);
@@ -1913,6 +1939,12 @@ function startPPRandomPhase() {
     const ppPhase = document.getElementById("pp-phase");
     if (ppPhase) ppPhase.style.display = "flex";
     
+    // GUEST GUARD: In online mode, the Guest only proceed if games are synced
+    if (myRoomData.isOnline && !amILeader && (!ppRandomGames || ppRandomGames.length === 0)) {
+        console.log("Guest is waiting for Global Paradox games to sync...");
+        return;
+    }
+
     renderPPBoard();
 }
 
@@ -2096,8 +2128,6 @@ function handlePPTacticalSync(data) {
 
 function handlePPGlobalSync(data) {
     ppDecisions[data.actor] = data.decision;
-
-    // Check if both have decided
     if (ppDecisions.p1 && ppDecisions.p2) {
         revealPPGlobalDecisions();
     } else {
@@ -2147,15 +2177,27 @@ function revealPPGlobalDecisions() {
     ppState_ui.p1Judgments.push(ppDecisions.p1);
     ppState_ui.p2Judgments.push(ppDecisions.p2);
 
-    setTimeout(() => {
-        ppRandomIndex++;
-        ppDecisions = { p1: null, p2: null };
-        // Clean up stamp container for next turn
-        stampContainer.innerHTML = '<div id="pp-stamp" style="font-family: var(--font-head); font-size: 32px; font-weight: 900; background: rgba(0,0,0,0.8); padding: 10px 20px; border: 4px solid #ffd700; border-radius: 10px; text-transform: uppercase;">BUY</div>';
-        stampContainer.style.flexDirection = "row";
-        stampContainer.style.transform = "rotate(-15deg)";
-        renderPPBoard();
-    }, 4000);
+    // Show countdown for NEXT game
+    let nextCount = 4;
+    const subt = document.getElementById("pp-subtitle");
+    if(subt) {
+        subt.style.color = "var(--text-dim)";
+        subt.innerText = `NEXT GAME IN ${nextCount}...`;
+    }
+
+    const nextTimer = setInterval(() => {
+        nextCount--;
+        if(nextCount > 0) {
+            if(subt) subt.innerText = `NEXT GAME IN ${nextCount}...`;
+        } else {
+            clearInterval(nextTimer);
+            ppRandomIndex++;
+            ppDecisions = { p1: null, p2: null };
+            // Clean up stamp container for next turn
+            stampContainer.innerHTML = "";
+            renderPPBoard();
+        }
+    }, 1000);
 }
 
 function applyPPStampStyle(stamp, decision) {
@@ -2193,6 +2235,7 @@ function showPPSummary() {
         summaryDiv.style.width = "100%";
         container.appendChild(summaryDiv);
     }
+    summaryDiv.innerHTML = ""; // FULL CLEAR to prevent double-rendering during sync races
     summaryDiv.style.display = "block";
 
     const p1Name = getPlayerName("p1");
@@ -2211,7 +2254,8 @@ function showPPSummary() {
 
     const drawGrid = (judgments, list, gridId) => {
         const grid = document.getElementById(gridId);
-        if (!list) return;
+        if (!list || list.length === 0) return;
+        
         list.forEach((gameIdOrObj, i) => {
             const game = (typeof gameIdOrObj === 'object') ? gameIdOrObj : masterGameLibrary.find(g => Number(g.id) === Number(gameIdOrObj));
             if(!game) return;
@@ -2254,8 +2298,8 @@ function showPPSummary() {
         resetGameToMenu();
         document.getElementById("pp-active-card").style.display = "flex";
         document.getElementById("pp-controls").style.display = "flex";
-        const sumDiv = document.getElementById("pp-summary-div");
-        if(sumDiv) sumDiv.style.display = "none";
+        const sd = document.getElementById("pp-summary-div");
+        if(sd) sd.style.display = "none";
     };
     endRow.appendChild(mainBtn);
     summaryDiv.appendChild(endRow);

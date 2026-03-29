@@ -64,6 +64,15 @@ function proceedHL() {
 
     if (hlState.roundCount >= 20) {
         const winner = hlState.p1Score > hlState.p2Score ? getPlayerName('p1') : getPlayerName('p2');
+        if (myRoomData.isOnline && amILeader) {
+             socket.emit('hl-next-game-sync', {
+                roomId: myRoomData.roomId,
+                round: 20,
+                p1Score: hlState.p1Score,
+                p2Score: hlState.p2Score,
+                isGameOver: true // New flag for robust end
+            });
+        }
         showModal("GAME OVER", `${winner} WINS!`);
         resetGameToMenu();
         return;
