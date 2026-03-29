@@ -75,7 +75,8 @@ async function loadGames() {
                     roomId: myRoomData.roomId,
                     library: masterGameLibrary,
                     pool: draftingPool,
-                    ccCategory: ccState.category // Hijacked payload for robust synchronization
+                    ccCategory: ccState.category, // Hijacked payload for robust synchronization
+                    kcuPhaseBypass: gameState.phase // Pass the phase in case the server dropped it
                 });
                 isGuestWaiting = false;
             }

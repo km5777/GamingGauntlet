@@ -113,6 +113,8 @@ function handleConfirm() {
                 startBlindRankingPhase();
             } else if (gameState.phase === 'category_clash') {
                 startCategoryClashPhase();
+            } else if (gameState.phase === 'keep_cut_upgrade') {
+                startKeepCutUpgradePhase();
             } else {
                 startKeepKillPhase();
             }

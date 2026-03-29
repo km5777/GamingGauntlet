@@ -406,6 +406,9 @@ function resetGameToMenu() {
     const ccPhase = document.getElementById('cc-phase');
     if (ccPhase) ccPhase.style.display = 'none';
 
+    const kcuPhase = document.getElementById('kcu-phase');
+    if (kcuPhase) kcuPhase.style.display = 'none';
+
     // Reset Higher Lower scores
     hlState.p1Score = 0;
     hlState.p2Score = 0;
@@ -426,17 +429,25 @@ document.getElementById('open-online-btn').onclick = () => {
 
     document.getElementById('modal-online-rooms').style.display = 'flex';
 };
+function setActiveMode(activeId) {
+    const modes = [
+        'mode-keep-kill', 'mode-higher-lower', 'mode-blind-ranking', 
+        'mode-category-clash', 'mode-keep-cut-upgrade'
+    ];
+    modes.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) {
+            if (id === activeId) el.classList.add('active-mode');
+            else el.classList.remove('active-mode');
+        }
+    });
+}
+
 document.getElementById('mode-keep-kill').onclick = () => {
     if (window.SFX) SFX.openUI();
     gameState.phase = "drafting";
     draftLimit = 10; // Default for keep/kill
-    // UI Indicator
-    document.getElementById('mode-keep-kill').classList.add('active-mode');
-    document.getElementById('mode-higher-lower').classList.remove('active-mode');
-    const brMode = document.getElementById('mode-blind-ranking');
-    if (brMode) brMode.classList.remove('active-mode');
-    const ccMode = document.getElementById('mode-category-clash');
-    if (ccMode) ccMode.classList.remove('active-mode');
+    setActiveMode('mode-keep-kill');
 
     document.getElementById('modal-game-selection').style.display = 'none';
     document.getElementById('modal-variant-selection').style.display = 'flex';
@@ -466,13 +477,7 @@ document.getElementById('mode-higher-lower').onclick = () => {
     if (window.SFX) SFX.openUI();
     gameState.phase = "higher_lower";
     currentVariant = 'random';
-    // UI Indicator
-    document.getElementById('mode-higher-lower').classList.add('active-mode');
-    document.getElementById('mode-keep-kill').classList.remove('active-mode');
-    const brMode = document.getElementById('mode-blind-ranking');
-    if (brMode) brMode.classList.remove('active-mode');
-    const ccMode = document.getElementById('mode-category-clash');
-    if (ccMode) ccMode.classList.remove('active-mode');
+    setActiveMode('mode-higher-lower');
 
     // Higher lower doesn't need to ask for search vs random or limits, it just unlocks play buttons
     document.getElementById('sub-mode-selection').style.display = 'block';
@@ -485,11 +490,7 @@ if (brModeBtn) {
         gameState.phase = "blind_ranking";
         currentVariant = 'search'; // Force search variant for Blind Ranking
         
-        brModeBtn.classList.add('active-mode');
-        document.getElementById('mode-keep-kill').classList.remove('active-mode');
-        document.getElementById('mode-higher-lower').classList.remove('active-mode');
-        const ccMode = document.getElementById('mode-category-clash');
-        if (ccMode) ccMode.classList.remove('active-mode');
+        setActiveMode('mode-blind-ranking');
         
         document.getElementById('modal-game-selection').style.display = 'none';
         document.getElementById('modal-br-limits').style.display = 'flex';
@@ -504,10 +505,21 @@ if (ccModeBtn) {
         currentVariant = 'search'; 
         draftLimit = 5;
         
-        ccModeBtn.classList.add('active-mode');
-        document.getElementById('mode-keep-kill').classList.remove('active-mode');
-        document.getElementById('mode-higher-lower').classList.remove('active-mode');
-        if (brModeBtn) brModeBtn.classList.remove('active-mode');
+        setActiveMode('mode-category-clash');
+        
+        document.getElementById('sub-mode-selection').style.display = 'block';
+    };
+}
+
+const kcuModeBtn = document.getElementById('mode-keep-cut-upgrade');
+if (kcuModeBtn) {
+    kcuModeBtn.onclick = () => {
+        if (window.SFX) SFX.openUI();
+        gameState.phase = "keep_cut_upgrade";
+        currentVariant = 'search'; 
+        draftLimit = 3; // EXACTLY 3 games
+        
+        setActiveMode('mode-keep-cut-upgrade');
         
         document.getElementById('sub-mode-selection').style.display = 'block';
     };
@@ -1347,6 +1359,223 @@ function ccRevealGameVisual(role, idx, game) {
             <span style="font-size: 14px; font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding-left: 10px; width: 100%; color:var(--text-main); text-align: left;">${game.name}</span>
         `;
         slotEl.style.border = role === 'p1' ? '2px solid var(--neon-p1)' : '2px solid var(--neon-p2)';
-        slotEl.style.boxShadow = role === 'p1' ? '0 0 10px rgba(0, 240, 255, 0.5)' : '0 0 10px rgba(255, 0, 255, 0.5)';
     }
+}
+
+// --- KEEP CUT UPGRADE (KCU) LOGIC ---
+let kcuState = {
+    p1Choices: { keep: null, cut: null, upgrade: null },
+    p2Choices: { keep: null, cut: null, upgrade: null },
+    turn: 'p1',
+    p1Locked: false,
+    p2Locked: false
+};
+
+function startKeepCutUpgradePhase() {
+    document.getElementById('draft-phase').style.display = 'none';
+    const kcuPhase = document.getElementById('kcu-phase');
+    if (kcuPhase) kcuPhase.style.display = 'block';
+
+    kcuState = {
+        p1Choices: { keep: null, cut: null, upgrade: null },
+        p2Choices: { keep: null, cut: null, upgrade: null },
+        turn: myRoomData.isOnline ? myIdentity : 'p1',
+        p1Locked: false,
+        p2Locked: false
+    };
+    renderKCUBoard();
+}
+
+function renderKCUBoard() {
+    const container = document.getElementById('kcu-cards-container');
+    if (!container) return;
+    container.innerHTML = '';
+    
+    const isP1Turn = (kcuState.turn === 'p1');
+    const listToJudge = isP1Turn ? gameState.player2.draftedForP1 : gameState.player1.draftedForP2;
+    
+    document.getElementById('kcu-title').innerText = myRoomData.isOnline ? "FATE'S TRIFECTA" : `PLAYER ${isP1Turn ? 1 : 2}: CHOOSE THEIR FATE`;
+    document.getElementById('kcu-subtitle').innerText = "Assign EXACTLY ONE fate to each game.";
+
+    listToJudge.forEach((gameId) => {
+        const game = masterGameLibrary.find(g => Number(g.id) === Number(gameId));
+        if (!game) return;
+
+        const card = document.createElement('div');
+        card.className = 'game-card br-slot empty'; 
+        card.style.height = '380px';
+        card.style.flexDirection = 'column';
+        card.style.position = 'relative';
+        card.style.cursor = 'default';
+        card.style.overflow = 'visible';
+        card.style.border = '2px solid var(--border-subtle)';
+        
+        card.innerHTML = `
+            <img src="${game.background_image || ''}" style="width:100%; height:200px; object-fit:cover; border-radius:5px 5px 0 0;">
+            <h3 style="padding:10px; font-size:16px; min-height:40px; margin:0; text-align:center;">${game.name}</h3>
+            <div style="flex:1;"></div>
+            <div class="kcu-actions" style="display:flex; justify-content:space-between; width:100%; padding: 5px; box-sizing:border-box; gap: 5px;">
+                <button class="kcu-btn keep-btn glow-btn" style="flex:1; font-size:10px; padding:8px 0; min-width:0; background:rgba(0,255,100,0.1);" onclick="assignFate('${gameId}', 'keep')">KEEP</button>
+                <button class="kcu-btn cut-btn glow-btn" style="flex:1; font-size:10px; padding:8px 0; min-width:0; background:rgba(255,0,0,0.1);" onclick="assignFate('${gameId}', 'cut')">CUT</button>
+                <button class="kcu-btn upgrade-btn glow-btn" style="flex:1; font-size:10px; padding:8px 0; min-width:0; background:rgba(255,200,0,0.1);" onclick="assignFate('${gameId}', 'upgrade')">UPGRADE</button>
+            </div>
+            <div id="kcu-fate-badge-${gameId}" class="fate-badge" style="display:none; position:absolute; top:-15px; right:-15px; padding: 10px; font-size: 20px; border-radius: 50%; box-shadow: 0 0 15px black; z-index: 10;"></div>
+        `;
+
+        container.appendChild(card);
+    });
+    
+    document.getElementById('kcu-confirm-btn').style.display = 'none';
+    updateKCUButtons();
+}
+
+function assignFate(gameId, fate) {
+    if (window.SFX) SFX.click();
+    const isP1Turn = (kcuState.turn === 'p1');
+    let choices = isP1Turn ? kcuState.p1Choices : kcuState.p2Choices;
+    
+    // Remove if already assigned this exact fate
+    if (choices[fate] === Number(gameId)) {
+        choices[fate] = null;
+    } else {
+        // Remove this game from any previous fate
+        if (choices.keep === Number(gameId)) choices.keep = null;
+        if (choices.cut === Number(gameId)) choices.cut = null;
+        if (choices.upgrade === Number(gameId)) choices.upgrade = null;
+        
+        choices[fate] = Number(gameId);
+    }
+    
+    updateKCUButtons();
+}
+
+function updateKCUButtons() {
+    const isP1Turn = (kcuState.turn === 'p1');
+    let choices = isP1Turn ? kcuState.p1Choices : kcuState.p2Choices;
+    const listToJudge = isP1Turn ? gameState.player2.draftedForP1 : gameState.player1.draftedForP2;
+    
+    listToJudge.forEach(gameId => {
+        gameId = Number(gameId);
+        const fate = choices.keep === gameId ? 'keep' : choices.cut === gameId ? 'cut' : choices.upgrade === gameId ? 'upgrade' : null;
+        const badge = document.getElementById(`kcu-fate-badge-${gameId}`);
+        if(badge) {
+            if (fate) {
+                badge.style.display = 'block';
+                if(fate === 'keep') { badge.innerText = "🛡️ KEEP"; badge.style.background = "var(--correct)"; badge.style.color = "white"; badge.style.fontSize="12px";}
+                if(fate === 'cut') { badge.innerText = "❌ CUT"; badge.style.background = "var(--incorrect)"; badge.style.color = "white"; badge.style.fontSize="12px";}
+                if(fate === 'upgrade') { badge.innerText = "✨ UPGRADE"; badge.style.background = "var(--accent)"; badge.style.color = "white"; badge.style.fontSize="12px";}
+            } else {
+                badge.style.display = 'none';
+            }
+        }
+    });
+    
+    const confirmBtn = document.getElementById('kcu-confirm-btn');
+    if (choices.keep && choices.cut && choices.upgrade) {
+        confirmBtn.style.display = 'block';
+    } else {
+        confirmBtn.style.display = 'none';
+    }
+}
+
+document.getElementById('kcu-confirm-btn').onclick = () => {
+    if (window.SFX) window.SFX.click();
+    document.getElementById('kcu-confirm-btn').style.display = 'none';
+    const isP1Turn = (kcuState.turn === 'p1');
+    if (myRoomData.isOnline) {
+        if(isP1Turn) kcuState.p1Locked = true;
+        else kcuState.p2Locked = true;
+        
+        const myChoices = isP1Turn ? kcuState.p1Choices : kcuState.p2Choices;
+        
+        document.getElementById('kcu-subtitle').innerText = "WAITING ON OPPONENT...";
+        document.getElementById('kcu-cards-container').innerHTML = '';
+        
+        // Hijack br-place-game
+        if (socket) {
+            socket.emit('br-place-game', {
+                roomId: myRoomData.roomId,
+                isKCU: true,
+                role: myIdentity,
+                choices: myChoices
+            });
+        }
+        checkKCUFinished();
+    } else {
+        // LOCAL PLAY SWITCH
+        if (isP1Turn) {
+            kcuState.turn = 'p2';
+            renderKCUBoard();
+        } else {
+            showKCUSummary();
+        }
+    }
+};
+
+function checkKCUFinished() {
+    if (kcuState.p1Locked && kcuState.p2Locked) {
+        showKCUSummary();
+    }
+}
+
+function showKCUSummary() {
+    document.getElementById('kcu-title').innerText = "THE VERDICTS ARE IN";
+    document.getElementById('kcu-subtitle').innerText = "";
+    document.getElementById('kcu-confirm-btn').style.display = 'none';
+    
+    const container = document.getElementById('kcu-cards-container');
+    container.innerHTML = `<div style="display:flex; flex-direction:column; gap: 40px; width: 100%;">
+        <div id="kcu-p1-summary" style="display:flex; flex-direction:column; align-items:center;">
+             <h3 class="neon-text" style="color:var(--neon-p1); margin-bottom:15px; text-transform:uppercase;">HOW PLAYER 1 JUDGED PLAYER 2'S GAMES</h3>
+             <div id="kcu-p1-grid" style="display:flex; gap:20px;"></div>
+        </div>
+        <div id="kcu-p2-summary" style="display:flex; flex-direction:column; align-items:center;">
+             <h3 class="neon-text" style="color:var(--neon-p2); margin-bottom:15px; text-transform:uppercase;">HOW PLAYER 2 JUDGED PLAYER 1'S GAMES</h3>
+             <div id="kcu-p2-grid" style="display:flex; gap:20px;"></div>
+        </div>
+    </div>`;
+    
+    const drawSummary = (choices, draftedList, gridId) => {
+        const grid = document.getElementById(gridId);
+        draftedList.forEach(gameId => {
+            const game = masterGameLibrary.find(g => Number(g.id) === Number(gameId));
+            if(!game) return;
+            const fate = choices.keep === Number(gameId) ? 'keep' : choices.cut === Number(gameId) ? 'cut' : choices.upgrade === Number(gameId) ? 'upgrade' : 'none';
+            
+            let badgeHtml = "";
+            let borderColor = "var(--border-subtle)";
+            if(fate === 'keep') { badgeHtml = "🛡️ KEEP"; borderColor = "var(--correct)"; }
+            if(fate === 'cut') { badgeHtml = "❌ CUT"; borderColor = "var(--incorrect)"; }
+            if(fate === 'upgrade') { badgeHtml = "✨ UPGRADE"; borderColor = "var(--accent)"; }
+            
+            grid.innerHTML += `
+               <div class="game-card" style="width:200px; height:280px; flex-direction:column; border: 2px solid ${borderColor}; cursor:default;">
+                   <img src="${game.background_image || ''}" style="width:100%; height:120px; object-fit:cover; border-radius:5px 5px 0 0;">
+                   <h3 style="padding:10px; font-size:14px; text-align:center;">${game.name}</h3>
+                   <div style="flex:1;"></div>
+                   <div style="width:100%; padding: 10px; text-align:center; font-weight:bold; background:${borderColor}; color:white;">${badgeHtml}</div>
+               </div>
+            `;
+        });
+    };
+    
+    // Player 1's choices on games handed by Player 2
+    drawSummary(kcuState.p1Choices, gameState.player2.draftedForP1, 'kcu-p1-grid');
+    // Player 2's choices on games handed by Player 1
+    drawSummary(kcuState.p2Choices, gameState.player1.draftedForP2, 'kcu-p2-grid');
+
+    const endRow = document.createElement('div');
+    endRow.style.width = '100%';
+    endRow.style.display = 'flex';
+    endRow.style.justifyContent = 'center';
+    endRow.style.marginTop = '30px';
+    const mainBtn = document.createElement('button');
+    mainBtn.className = 'glow-btn pink';
+    mainBtn.innerText = 'MAIN MENU';
+    mainBtn.onclick = () => {
+        if(window.SFX) SFX.click();
+        resetGameToMenu();
+    };
+    endRow.appendChild(mainBtn);
+    container.appendChild(endRow);
 }

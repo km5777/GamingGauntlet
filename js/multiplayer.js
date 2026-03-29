@@ -126,6 +126,10 @@ function connectMultiplayer() {
         masterGameLibrary = data.library;
         draftingPool = data.pool;
         if (data.ccCategory) ccState.category = data.ccCategory; // Retrieve Hijacked payload
+        if (data.kcuPhaseBypass) {
+            gameState.phase = data.kcuPhaseBypass; // Force sync phase to override deployed server gaps
+            if (data.kcuPhaseBypass === 'keep_cut_upgrade') draftLimit = 3;
+        }
         
         // Proper Fisher-Yates shuffle for the guest
         for (let i = draftingPool.length - 1; i > 0; i--) {
@@ -260,6 +264,8 @@ function connectMultiplayer() {
             startBlindRankingPhase();
         } else if (gameState.phase === 'category_clash') {
             startCategoryClashPhase();
+        } else if (gameState.phase === 'keep_cut_upgrade') {
+            startKeepCutUpgradePhase();
         } else {
             gameState.phase = "keep_kill";
             startKeepKillPhase();
@@ -267,7 +273,21 @@ function connectMultiplayer() {
     });
 
     socket.on('br-opponent-placed', (data) => {
-        if (!myRoomData.isOnline || typeof updateBRSlot !== 'function') return;
+        if (!myRoomData.isOnline) return;
+        
+        if (data.isKCU) {
+            if (data.role === 'p1') {
+                kcuState.p1Choices = data.choices;
+                kcuState.p1Locked = true;
+            } else {
+                kcuState.p2Choices = data.choices;
+                kcuState.p2Locked = true;
+            }
+            if (typeof checkKCUFinished === 'function') checkKCUFinished();
+            return;
+        }
+
+        if (typeof updateBRSlot !== 'function') return;
         const game = masterGameLibrary.find(g => Number(g.id) === Number(data.gameId));
         if (game) {
             let ranking = data.role === 'p1' ? brState.p1Ranking : brState.p2Ranking;

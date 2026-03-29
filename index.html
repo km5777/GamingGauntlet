@@ -79,6 +79,14 @@
                     <p>Create a custom prompt, pick 5 games, and reveal them one by one!</p>
                 </div>
             </div>
+            <div class="mode-card" id="mode-keep-cut-upgrade" style="margin-top:15px;">
+                <div class="mode-icon">⚡</div>
+                <div class="mode-info">
+                    <h3>THE TRINITY VERDICT</h3>
+                    <p>Draft 3 games for your friend. They must Keep one, Cut one, and Upgrade one!</p>
+                </div>
+            </div>
+            
             <div id="sub-mode-selection" style="display:none; margin-top:20px;">
                 <button id="play-local-btn" class="glow-btn">PLAY LOCAL</button>
                 <button id="play-online-btn" class="glow-btn pink">PLAY ONLINE</button>
@@ -355,6 +363,21 @@
                 <div id="cc-p2-slots" class="cc-slots-container" style="display:flex; flex-direction:column; gap:15px;">
                 </div>
             </div>
+        </div>
+        </div>
+    </div>
+
+    <!-- KEEP CUT UPGRADE PHASE -->
+    <div id="kcu-phase" class="full-page" style="display: none;">
+        <div class="ui-header" style="flex-direction: column; align-items: center; justify-content: center;">
+            <h2 id="kcu-title" class="neon-text" style="font-size: 32px; text-align: center; letter-spacing: 2px;">
+                YOUR TURN TO DECIDE
+            </h2>
+            <h3 id="kcu-subtitle" style="color: var(--text-dim); margin-top: 10px;">Assign a fate to each game.</h3>
+            <button id="kcu-confirm-btn" class="glow-btn pink" style="display: none; margin-top: 25px;">LOCK IN FATES</button>
+        </div>
+        <div id="kcu-cards-container" class="centered-grid" style="display: flex; gap: 40px; justify-content: center; align-items: flex-end; width: 100%; max-width: 1400px; padding: 20px;">
+            <!-- Generated via JS -->
         </div>
     </div>
 
