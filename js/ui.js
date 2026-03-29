@@ -403,6 +403,9 @@ function resetGameToMenu() {
     const brPhase = document.getElementById('br-phase');
     if (brPhase) brPhase.style.display = 'none';
 
+    const ccPhase = document.getElementById('cc-phase');
+    if (ccPhase) ccPhase.style.display = 'none';
+
     // Reset Higher Lower scores
     hlState.p1Score = 0;
     hlState.p2Score = 0;
