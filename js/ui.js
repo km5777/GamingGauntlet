@@ -1863,16 +1863,16 @@ function startPriceParadoxPhase() {
 }
 
 function renderPPBoard() {
-    if (ppState_ui.turnIndex >= 6) { // 3 games each = 6 turns total
+    if (ppState_ui.turnIndex >= 6) { 
         showPPSummary();
         return;
     }
 
     const isP1Turn = (ppState_ui.turnIndex % 2 === 0);
-    const activeJudge = isP1Turn ? "p1" : "p2";
+    const activeJudgeRole = isP1Turn ? "p1" : "p2";
     
+    // Who is judging right now?
     const internalListIndex = Math.floor(ppState_ui.turnIndex / 2);
-    
     const listToJudge = isP1Turn ? gameState.player2.draftedForP1 : gameState.player1.draftedForP2;
     const activeGameId = listToJudge[internalListIndex];
     const game = masterGameLibrary.find(g => Number(g.id) === Number(activeGameId));
@@ -1886,16 +1886,19 @@ function renderPPBoard() {
     const titleEl = document.getElementById("pp-title");
     const subtEl = document.getElementById("pp-subtitle");
     
+    // Check if it is the current user's turn
+    let isMyTurn = !myRoomData.isOnline || (myIdentity === activeJudgeRole);
+
     if (myRoomData.isOnline) {
-        if (myIdentity === activeJudge) {
+        if (isMyTurn) {
             titleEl.innerText = "VALUATION TIME";
             subtEl.innerText = "Is this game worth its full price?";
             titleEl.style.color = (myIdentity === "p1") ? "var(--neon-p1)" : "var(--neon-p2)";
         } else {
-            const partnerName = getPlayerName(activeJudge);
+            const partnerName = getPlayerName(activeJudgeRole);
             titleEl.innerText = `WAITING FOR ${partnerName.toUpperCase()}`;
             subtEl.innerText = "They are considering the price tag...";
-            titleEl.style.color = (activeJudge === "p1") ? "var(--neon-p1)" : "var(--neon-p2)";
+            titleEl.style.color = (activeJudgeRole === "p1") ? "var(--neon-p1)" : "var(--neon-p2)";
         }
     } else {
         titleEl.innerText = `PLAYER ${isP1Turn ? "1" : "2"}: YOUR DECISION`;
@@ -1911,20 +1914,24 @@ function renderPPBoard() {
     activeCard.style.border = `2px solid ${isP1Turn ? "var(--neon-p1)" : "var(--neon-p2)"}`;
     activeCard.style.boxShadow = `0 0 15px ${isP1Turn ? "var(--neon-p1)" : "var(--neon-p2)"}`;
 
+    // Update buttons
     const btnB = document.getElementById("pp-btn-buy");
     const btnS = document.getElementById("pp-btn-sale");
     const btnK = document.getElementById("pp-btn-skip");
 
-    let isMyTurn = !myRoomData.isOnline || myIdentity === activeJudge;
-
-    [btnB, btnS, btnK].forEach(btn => {
+    const controls = [btnB, btnS, btnK];
+    controls.forEach(btn => {
+        if (!btn) return;
         btn.style.opacity = isMyTurn ? "1" : "0.5";
         btn.style.cursor = isMyTurn ? "pointer" : "not-allowed";
+        
+        // Remove old listeners to prevent double-firings or stale closures
         const newBtn = btn.cloneNode(true);
         btn.parentNode.replaceChild(newBtn, btn);
     });
 
     if (isMyTurn) {
+        // Re-grab the new clones to add listeners
         document.getElementById("pp-btn-buy").onclick = () => assignPPFate("buy");
         document.getElementById("pp-btn-sale").onclick = () => assignPPFate("sale");
         document.getElementById("pp-btn-skip").onclick = () => assignPPFate("skip");
