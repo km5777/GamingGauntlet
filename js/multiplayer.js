@@ -108,7 +108,8 @@ function connectMultiplayer() {
                 socket.emit('sync-library', {
                     roomId: myRoomData.roomId,
                     library: masterGameLibrary,
-                    pool: draftingPool
+                    pool: draftingPool,
+                    ccCategory: ccState.category // Hijacked payload for robust synchronization
                 });
             } else {
                 if (typeof isGuestWaiting !== 'undefined') {
@@ -124,6 +125,7 @@ function connectMultiplayer() {
     socket.on('init-library', (data) => {
         masterGameLibrary = data.library;
         draftingPool = data.pool;
+        if (data.ccCategory) ccState.category = data.ccCategory; // Retrieve Hijacked payload
         
         // Proper Fisher-Yates shuffle for the guest
         for (let i = draftingPool.length - 1; i > 0; i--) {
@@ -167,8 +169,23 @@ function connectMultiplayer() {
         }
     });
 
-    // 4. Update Reveal Sync to handle turn swaps properly
+    // 4. Update Reveal Sync to handle turn swaps properly (and Hijack for CC)
     socket.on('hl-sync-reveal', (data) => {
+        if (data.isCCReveal) {
+            // Hijacked route for CC Reveal to bypass outdated deploy constraints
+            const game = masterGameLibrary.find(g => Number(g.id) === Number(data.gameId));
+            if (!game) return;
+            if (typeof ccRevealGameVisual === 'function') ccRevealGameVisual(data.role, data.index, game);
+            if (data.role === 'p1') {
+                ccState.revealTurn = 'p2';
+            } else {
+                ccState.revealTurn = 'p1';
+                ccState.revealIndex--;
+            }
+            if (typeof updateCCPlayerControls === 'function') updateCCPlayerControls();
+            return;
+        }
+
         hlState.p1Score = data.score1;
         hlState.p2Score = data.score2;
 
@@ -266,21 +283,7 @@ function connectMultiplayer() {
     
     // CATEGORY CLASH LOGIC
     socket.on('cc-reveal-sync', (data) => {
-        // Find game object based on id
-        const game = masterGameLibrary.find(g => Number(g.id) === Number(data.gameId));
-        if (!game) return;
-
-        // Visual unflip
-        ccRevealGameVisual(data.role, data.index, game);
-
-        // Turn logic
-        if (data.role === 'p1') {
-            ccState.revealTurn = 'p2';
-        } else {
-            ccState.revealTurn = 'p1';
-            ccState.revealIndex--;
-        }
-        updateCCPlayerControls();
+        // Obsoleted fallback, relying on hijacked hl-sync-reveal
     });
 }
 

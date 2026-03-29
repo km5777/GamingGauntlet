@@ -1306,8 +1306,9 @@ function updateCCPlayerControls() {
             const gameId = draftList[ccState.revealIndex];
             
             if (myRoomData.isOnline) {
-                socket.emit('cc-reveal', {
+                socket.emit('hl-guess-sync', {
                     roomId: myRoomData.roomId,
+                    isCCReveal: true, // Hijacked payload to bypass undeployed server constraints
                     role: ccState.revealTurn,
                     index: ccState.revealIndex,
                     gameId: gameId

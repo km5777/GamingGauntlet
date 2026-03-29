@@ -74,7 +74,8 @@ async function loadGames() {
                 socket.emit('sync-library', {
                     roomId: myRoomData.roomId,
                     library: masterGameLibrary,
-                    pool: draftingPool
+                    pool: draftingPool,
+                    ccCategory: ccState.category // Hijacked payload for robust synchronization
                 });
                 isGuestWaiting = false;
             }
