@@ -196,7 +196,7 @@ function connectMultiplayer() {
                     kcuPhaseBypass: gameState.phase
                 });
             } else {
-                window.isGuestWaiting = true;
+                isGuestWaiting = true; // Must reference the let-binding from games.js, NOT window.*
             }
         }
     });
