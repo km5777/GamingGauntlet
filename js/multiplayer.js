@@ -11,7 +11,8 @@ let myRoomData = {
     players: []
 };
 
-const SERVER_URL = "https://gaminggauntlet.onrender.com";
+// Change to localhost so our recent local server edits actually take effect instead of pointing to the stale render deployment
+const SERVER_URL = "http://localhost:3000";
 
 function connectMultiplayer() {
     if (socket && socket.connected) return;
@@ -323,7 +324,40 @@ document.getElementById('create-room-btn').onclick = () => {
     connectMultiplayer();
     const name = document.getElementById('player-name-input').value;
     if (!name) return showModal("ERROR", "Enter a name first!");
-    socket.emit('create-room', name);
+
+    if (socket && socket.connected) {
+        socket.emit('create-room', name);
+    } else {
+        const btn = document.getElementById('create-room-btn');
+        const origText = btn.innerText;
+        btn.innerText = "CONNECTING...";
+        btn.disabled = true;
+
+        setTimeout(() => {
+            btn.innerText = origText;
+            btn.disabled = false;
+            if (!socket || !socket.connected) {
+                let timeLeft = 15;
+                showModal("SERVER OFFLINE", `The server is offline or waking up. Please try again in ${timeLeft} seconds.`);
+                const interval = setInterval(() => {
+                    const titleNode = document.getElementById('modal-title');
+                    if (!titleNode || titleNode.innerText !== "SERVER OFFLINE") {
+                        clearInterval(interval);
+                        return;
+                    }
+                    timeLeft--;
+                    if (timeLeft > 0) {
+                        document.getElementById('modal-message').innerText = `The server is offline or waking up. Please try again in ${timeLeft} seconds.`;
+                    } else {
+                        clearInterval(interval);
+                        document.getElementById('custom-modal').style.display = 'none';
+                    }
+                }, 1000);
+            } else {
+                socket.emit('create-room', name);
+            }
+        }, 2000);
+    }
 };
 
 // Join Room Button
@@ -338,10 +372,13 @@ document.getElementById('join-room-btn').onclick = () => {
 // --- NEW: LEAVE ROOM BUTTON LOGIC ---
 const leaveBtn = document.getElementById('leave-room-btn');
 if (leaveBtn) {
-    leaveBtn.onclick = () => {
+    const doLeave = (e) => {
+        if (e && e.type === 'touchstart') e.preventDefault();
         if (socket && myRoomData.roomId) {
             socket.emit('leave-room', myRoomData.roomId); // Tell server we left
         }
         resetLocalRoomState(); // Reset our local UI back to the Join/Create screen
     };
+    leaveBtn.onclick = doLeave;
+    leaveBtn.addEventListener('touchstart', doLeave, { passive: false });
 }

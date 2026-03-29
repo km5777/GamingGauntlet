@@ -93,6 +93,13 @@ io.on('connection', (socket) => {
     socket.on('start-game-request', (data) => {
         const room = rooms[data.roomId];
         if (room && room.players[0].id === socket.id) {
+            
+            // Reset player states for the new game
+            room.players.forEach(p => {
+                p.ready = false;
+                p.draftList = [];
+            });
+
             // Broadcast start signal to everyone
             io.to(data.roomId).emit('init-online-game', {
                 variant: data.variant,

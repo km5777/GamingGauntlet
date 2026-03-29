@@ -118,6 +118,9 @@ function startKeepKillPhase() {
 
 function setupEmptyGrids() {
     ['p1', 'p2'].forEach(p => {
+        const title = document.getElementById(`${p}-status-title`);
+        if (title) title.innerText = `${getPlayerName(p).toUpperCase()} STATUS`;
+
         const grid = document.getElementById(`${p}-grid`);
         if (!grid) return;
         grid.innerHTML = '';
@@ -146,7 +149,8 @@ function showRevealPicker() {
         let list = (attackerRole === 'p1') ? gameState.player1.draftedForP2 : gameState.player2.draftedForP1;
 
         list.forEach((gameId, index) => {
-            const game = masterGameLibrary.find(g => g.id === gameId);
+            const game = masterGameLibrary.find(g => Number(g.id) === Number(gameId));
+            if (!game) return;
             const card = document.createElement('div');
             card.className = 'reveal-choice-card';
             card.style.opacity = "1";
@@ -357,6 +361,9 @@ function resetGameToMenu() {
     if (draft) draft.style.display = 'block';
     if (menu) menu.style.display = 'flex';
     if (leaveBtn) leaveBtn.style.display = 'none'; // Hide leave button on menu
+
+    const loadingOverlay = document.getElementById('loading-screen');
+    if (loadingOverlay) loadingOverlay.style.display = 'none';
 
     const hlPhase = document.getElementById('hl-phase');
     if (hlPhase) hlPhase.style.display = 'none';
@@ -873,6 +880,9 @@ function startBlindRankingPhase() {
 
 function setupBRGrids() {
     ['p1', 'p2'].forEach(p => {
+        const title = document.getElementById(`br-${p}-title`);
+        if (title) title.innerText = `${getPlayerName(p).toUpperCase()} RANKING`;
+
         const slotsContainer = document.getElementById(`br-${p}-slots`);
         slotsContainer.innerHTML = '';
         

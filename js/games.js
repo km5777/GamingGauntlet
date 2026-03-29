@@ -28,7 +28,10 @@ async function loadGames() {
         const pages = Array.from({ length: 6 }, () => Math.floor(Math.random() * 25) + 1);
         const requests = pages.map(page =>
             fetch(`https://api.rawg.io/api/games?key=${API_KEY}&page_size=40&page=${page}&ordering=-added&dates=1980-01-01,2026-12-31`)
-                .then(res => res.json())
+                .then(res => {
+                    if (!res.ok) return { results: [] };
+                    return res.json().catch(() => ({ results: [] }));
+                })
         );
 
         const allResults = await Promise.all(requests);
@@ -128,14 +131,14 @@ async function searchRAWG(query) {
 
 function refreshLibraryUI() {
     // THE FIX: If the pool gets low, refill it from the master library
-    if (draftingPool.length < 40) {
+    if (draftingPool.length < 80) {
         console.log("Refilling drafting pool from master library...");
         draftingPool = [...masterGameLibrary];
         shuffleArray(draftingPool);
     }
 
-    // Grab 40 from the drafting pool
-    const displayBatch = draftingPool.splice(0, 40);
+    // Grab 80 from the drafting pool
+    const displayBatch = draftingPool.splice(0, 80);
     renderGameLibrary(displayBatch);
 }
 
