@@ -313,6 +313,8 @@ button:active:not(:disabled) {
     padding: 50px;
     max-width: 500px;
     width: 90%;
+    max-height: 85vh;
+    overflow-y: auto;
 }
 
 .modal-content.wide {

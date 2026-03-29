@@ -409,6 +409,9 @@ function resetGameToMenu() {
     const kcuPhase = document.getElementById('kcu-phase');
     if (kcuPhase) kcuPhase.style.display = 'none';
 
+    const oupPhase = document.getElementById('oup-phase');
+    if (oupPhase) oupPhase.style.display = 'none';
+
     // Reset Higher Lower scores
     hlState.p1Score = 0;
     hlState.p2Score = 0;
@@ -432,7 +435,7 @@ document.getElementById('open-online-btn').onclick = () => {
 function setActiveMode(activeId) {
     const modes = [
         'mode-keep-kill', 'mode-higher-lower', 'mode-blind-ranking', 
-        'mode-category-clash', 'mode-keep-cut-upgrade'
+        'mode-category-clash', 'mode-keep-cut-upgrade', 'mode-oup'
     ];
     modes.forEach(id => {
         const el = document.getElementById(id);
@@ -520,6 +523,20 @@ if (kcuModeBtn) {
         draftLimit = 3; // EXACTLY 3 games
         
         setActiveMode('mode-keep-cut-upgrade');
+        
+        document.getElementById('sub-mode-selection').style.display = 'block';
+    };
+}
+
+const oupModeBtn = document.getElementById('mode-oup');
+if (oupModeBtn) {
+    oupModeBtn.onclick = () => {
+        if (window.SFX) SFX.openUI();
+        gameState.phase = "oup";
+        currentVariant = 'search'; 
+        draftLimit = 5; // EXACTLY 5 games
+        
+        setActiveMode('mode-oup');
         
         document.getElementById('sub-mode-selection').style.display = 'block';
     };
@@ -1578,4 +1595,231 @@ function showKCUSummary() {
     };
     endRow.appendChild(mainBtn);
     container.appendChild(endRow);
+}
+
+// --- OUP (Overrated, Underrated, Perfectly Rated) LOGIC ---
+let oupState = {
+    turnIndex: 0, 
+    p1Judgments: [],
+    p2Judgments: []
+};
+
+function startOUPPhase() {
+    document.getElementById('draft-phase').style.display = 'none';
+    const oupPhase = document.getElementById('oup-phase');
+    if (oupPhase) oupPhase.style.display = 'flex';
+
+    oupState = {
+        turnIndex: 0,
+        p1Judgments: [],
+        p2Judgments: []
+    };
+    renderOUPBoard();
+}
+
+function renderOUPBoard() {
+    if (oupState.turnIndex >= 10) {
+        showOUPSummary();
+        return;
+    }
+
+    const isP1Turn = (oupState.turnIndex % 2 === 0);
+    const activeJudge = isP1Turn ? 'p1' : 'p2';
+    
+    const internalListIndex = Math.floor(oupState.turnIndex / 2);
+    
+    const listToJudge = isP1Turn ? gameState.player2.draftedForP1 : gameState.player1.draftedForP2;
+    const activeGameId = listToJudge[internalListIndex];
+    const game = masterGameLibrary.find(g => Number(g.id) === Number(activeGameId));
+
+    if (!game) {
+        oupState.turnIndex++;
+        renderOUPBoard();
+        return;
+    }
+
+    const titleEl = document.getElementById('oup-title');
+    const subtEl = document.getElementById('oup-subtitle');
+    
+    if (myRoomData.isOnline) {
+        if (myIdentity === activeJudge) {
+            titleEl.innerText = "YOUR TURN TO JUDGE";
+            subtEl.innerText = "Assign a rating to the game below.";
+            titleEl.style.color = (myIdentity === 'p1') ? 'var(--neon-p1)' : 'var(--neon-p2)';
+        } else {
+            const partnerName = myRoomData.players.find(p => p.role === activeJudge).name;
+            titleEl.innerText = `WAITING FOR ${partnerName.toUpperCase()}`;
+            subtEl.innerText = "They are currently judging...";
+            titleEl.style.color = (activeJudge === 'p1') ? 'var(--neon-p1)' : 'var(--neon-p2)';
+        }
+    } else {
+        titleEl.innerText = `PLAYER ${isP1Turn ? '1' : '2'}: YOUR TURN`;
+        subtEl.innerText = "Assign a rating to the game below.";
+        titleEl.style.color = isP1Turn ? 'var(--neon-p1)' : 'var(--neon-p2)';
+    }
+
+    document.getElementById('oup-active-img').src = game.background_image || '';
+    document.getElementById('oup-active-name').innerText = game.name;
+    document.getElementById('oup-stamp-container').style.display = 'none'; 
+    
+    const activeCard = document.getElementById('oup-active-card');
+    activeCard.style.border = `2px solid ${isP1Turn ? 'var(--neon-p1)' : 'var(--neon-p2)'}`;
+    activeCard.style.boxShadow = `0 0 15px ${isP1Turn ? 'var(--neon-p1)' : 'var(--neon-p2)'}`;
+
+    const btnU = document.getElementById('oup-btn-underrated');
+    const btnP = document.getElementById('oup-btn-perfect');
+    const btnO = document.getElementById('oup-btn-overrated');
+
+    let isMyTurn = !myRoomData.isOnline || myIdentity === activeJudge;
+
+    [btnU, btnP, btnO].forEach(btn => {
+        btn.style.opacity = isMyTurn ? '1' : '0.5';
+        btn.style.cursor = isMyTurn ? 'pointer' : 'not-allowed';
+        const newBtn = btn.cloneNode(true);
+        btn.parentNode.replaceChild(newBtn, btn);
+    });
+
+    if (isMyTurn) {
+        document.getElementById('oup-btn-underrated').onclick = () => assignOUPFate('underrated');
+        document.getElementById('oup-btn-perfect').onclick = () => assignOUPFate('perfect');
+        document.getElementById('oup-btn-overrated').onclick = () => assignOUPFate('overrated');
+    }
+}
+
+function assignOUPFate(fate) {
+    if (window.SFX) SFX.click();
+    
+    if (myRoomData.isOnline) {
+        if (socket) {
+            socket.emit('hl-guess-sync', {
+                roomId: myRoomData.roomId,
+                isOUP: true,
+                actor: myIdentity,
+                decision: fate,
+                index: oupState.turnIndex
+            });
+        }
+    } else {
+        handleOUPDecisionSync({ actor: (oupState.turnIndex % 2 === 0 ? 'p1' : 'p2'), decision: fate, index: oupState.turnIndex });
+    }
+}
+
+function handleOUPDecisionSync(data) {
+    if (window.SFX && data.actor !== myIdentity) SFX.correct();
+
+    const stampContainer = document.getElementById('oup-stamp-container');
+    stampContainer.style.display = 'flex';
+    const stamp = document.getElementById('oup-stamp');
+    
+    if (data.decision === 'overrated') {
+        stamp.innerText = "OVERRATED";
+        stamp.style.border = "4px solid var(--incorrect)";
+        stamp.style.color = "var(--incorrect)";
+    } else if (data.decision === 'underrated') {
+        stamp.innerText = "UNDERRATED";
+        stamp.style.border = "4px solid var(--neon-p1)";
+        stamp.style.color = "var(--neon-p1)";
+    } else {
+        stamp.innerText = "PERFECTLY RATED";
+        stamp.style.border = "4px solid var(--correct)";
+        stamp.style.color = "var(--correct)";
+    }
+    
+    stamp.style.animation = 'none';
+    void stamp.offsetWidth; 
+    stamp.style.animation = 'pop-in 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards';
+
+    const isP1Turn = (data.index % 2 === 0);
+    if (isP1Turn) {
+        oupState.p1Judgments.push(data.decision);
+    } else {
+        oupState.p2Judgments.push(data.decision);
+    }
+
+    setTimeout(() => {
+        oupState.turnIndex++;
+        renderOUPBoard();
+    }, 2500);
+}
+
+function showOUPSummary() {
+    const titleEl = document.getElementById('oup-title');
+    const subtEl = document.getElementById('oup-subtitle');
+    titleEl.innerText = "FINAL RATINGS";
+    subtEl.innerText = "How your competitor judged your choices";
+    titleEl.style.color = "var(--text-main)";
+
+    document.getElementById('oup-active-card').style.display = 'none';
+    document.getElementById('oup-controls').style.display = 'none';
+
+    const container = document.querySelector('#oup-phase .centered-grid');
+    
+    let summaryDiv = document.getElementById('oup-summary-div');
+    if(!summaryDiv) {
+        summaryDiv = document.createElement('div');
+        summaryDiv.id = "oup-summary-div";
+        summaryDiv.style.width = "100%";
+        container.appendChild(summaryDiv);
+    }
+    summaryDiv.style.display = 'block';
+
+    const p1Name = myRoomData.isOnline ? myRoomData.players.find(p => p.role === 'p1').name.toUpperCase() : "P1";
+    const p2Name = myRoomData.isOnline ? myRoomData.players.find(p => p.role === 'p2').name.toUpperCase() : "P2";
+
+    summaryDiv.innerHTML = `<div style="display:flex; flex-direction:column; gap: 40px; width: 100%;">
+        <div style="display:flex; flex-direction:column; align-items:center;">
+             <h3 class="neon-text" style="color:var(--neon-p1); margin-bottom:15px; text-transform:uppercase;">${p1Name}'S VERDICTS</h3>
+             <div id="oup-p1-grid" style="display:flex; gap:15px; flex-wrap:wrap; justify-content:center;"></div>
+        </div>
+        <div style="display:flex; flex-direction:column; align-items:center;">
+             <h3 class="neon-text" style="color:var(--neon-p2); margin-bottom:15px; text-transform:uppercase;">${p2Name}'S VERDICTS</h3>
+             <div id="oup-p2-grid" style="display:flex; gap:15px; flex-wrap:wrap; justify-content:center;"></div>
+        </div>
+    </div>`;
+
+    const drawGrid = (judgments, list, gridId) => {
+        const grid = document.getElementById(gridId);
+        list.forEach((gameId, i) => {
+            const game = masterGameLibrary.find(g => Number(g.id) === Number(gameId));
+            if(!game) return;
+            const fate = judgments[i];
+            let badgeColor = "var(--text-dim)";
+            let fateTxt = "---";
+            if(fate === 'overrated') { badgeColor = "var(--incorrect)"; fateTxt = "OVERRATED"; }
+            if(fate === 'underrated') { badgeColor = "var(--neon-p1)"; fateTxt = "UNDERRATED"; }
+            if(fate === 'perfect') { badgeColor = "var(--correct)"; fateTxt = "PERFECT"; }
+            
+            grid.innerHTML += `
+               <div class="game-card" style="width:140px; height:200px; flex-direction:column; border: 2px solid ${badgeColor}; cursor:default;">
+                   <img src="${game.background_image || ''}" style="width:100%; height:80px; object-fit:cover; border-radius:5px 5px 0 0;">
+                   <h3 style="padding:5px; font-size:11px; text-align:center;">${game.name}</h3>
+                   <div style="flex:1;"></div>
+                   <div style="width:100%; padding: 5px; text-align:center; font-weight:bold; background:${badgeColor}; color:white; font-size:10px;">${fateTxt}</div>
+               </div>
+            `;
+        });
+    };
+
+    drawGrid(oupState.p1Judgments, gameState.player2.draftedForP1, 'oup-p1-grid');
+    drawGrid(oupState.p2Judgments, gameState.player1.draftedForP2, 'oup-p2-grid');
+
+    const endRow = document.createElement('div');
+    endRow.style.width = '100%';
+    endRow.style.display = 'flex';
+    endRow.style.justifyContent = 'center';
+    endRow.style.marginTop = '30px';
+    const mainBtn = document.createElement('button');
+    mainBtn.className = 'glow-btn pink';
+    mainBtn.innerText = 'MAIN MENU';
+    mainBtn.onclick = () => {
+        if(window.SFX) SFX.click();
+        resetGameToMenu();
+        // Custom reset for OUP phase UI
+        document.getElementById('oup-active-card').style.display = 'flex';
+        document.getElementById('oup-controls').style.display = 'flex';
+        const sumDiv = document.getElementById('oup-summary-div');
+        if(sumDiv) sumDiv.style.display = 'none';
+    };
+    endRow.appendChild(mainBtn);
+    summaryDiv.appendChild(endRow);
 }

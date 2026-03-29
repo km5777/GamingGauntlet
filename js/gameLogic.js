@@ -115,6 +115,8 @@ function handleConfirm() {
                 startCategoryClashPhase();
             } else if (gameState.phase === 'keep_cut_upgrade') {
                 startKeepCutUpgradePhase();
+            } else if (gameState.phase === 'oup') {
+                startOUPPhase();
             } else {
                 startKeepKillPhase();
             }

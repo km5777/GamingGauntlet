@@ -129,6 +129,7 @@ function connectMultiplayer() {
         if (data.kcuPhaseBypass) {
             gameState.phase = data.kcuPhaseBypass; // Force sync phase to override deployed server gaps
             if (data.kcuPhaseBypass === 'keep_cut_upgrade') draftLimit = 3;
+            else if (data.kcuPhaseBypass === 'oup') draftLimit = 5;
         }
         
         // Proper Fisher-Yates shuffle for the guest
@@ -187,6 +188,11 @@ function connectMultiplayer() {
                 ccState.revealIndex--;
             }
             if (typeof updateCCPlayerControls === 'function') updateCCPlayerControls();
+            return;
+        }
+
+        if (data.isOUP) {
+            if (typeof handleOUPDecisionSync === 'function') handleOUPDecisionSync(data);
             return;
         }
 
@@ -266,6 +272,8 @@ function connectMultiplayer() {
             startCategoryClashPhase();
         } else if (gameState.phase === 'keep_cut_upgrade') {
             startKeepCutUpgradePhase();
+        } else if (gameState.phase === 'oup') {
+            startOUPPhase();
         } else {
             gameState.phase = "keep_kill";
             startKeepKillPhase();
