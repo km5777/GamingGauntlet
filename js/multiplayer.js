@@ -11,8 +11,8 @@ let myRoomData = {
     players: []
 };
 
-// Change to localhost so our recent local server edits actually take effect instead of pointing to the stale render deployment
-const SERVER_URL = "http://localhost:3000";
+// Change to your actual server deployment URL
+const SERVER_URL = "https://gaminggauntlet.onrender.com";
 
 function connectMultiplayer() {
     if (socket && socket.connected) return;
