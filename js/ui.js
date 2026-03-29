@@ -438,7 +438,7 @@ document.getElementById('open-online-btn').onclick = () => {
 function setActiveMode(activeId) {
     const modes = [
         'mode-keep-kill', 'mode-higher-lower', 'mode-blind-ranking', 
-        'mode-category-clash', 'mode-keep-cut-upgrade', 'mode-oup'
+        'mode-category-clash', 'mode-keep-cut-upgrade', 'mode-oup', 'mode-price-paradox'
     ];
     modes.forEach(id => {
         const el = document.getElementById(id);
@@ -550,11 +550,33 @@ if (ppModeBtn) {
     ppModeBtn.onclick = () => {
         if (window.SFX) SFX.openUI();
         gameState.phase = "price_paradox";
-        currentVariant = 'search'; 
-        draftLimit = 3; 
-        
         setActiveMode('mode-price-paradox');
-        
+        document.getElementById('modal-game-selection').style.display = 'none';
+        document.getElementById('modal-pp-variant-selection').style.display = 'flex';
+    };
+}
+
+const ppTacticalBtn = document.getElementById('pp-variant-tactical');
+if (ppTacticalBtn) {
+    ppTacticalBtn.onclick = () => {
+        if (window.SFX) SFX.click();
+        currentVariant = 'search'; 
+        draftLimit = 3;
+        ppGlobalMode = false;
+        document.getElementById('modal-pp-variant-selection').style.display = 'none';
+        document.getElementById('modal-variant-selection').style.display = 'flex';
+    };
+}
+
+const ppGlobalBtn = document.getElementById('pp-variant-global');
+if (ppGlobalBtn) {
+    ppGlobalBtn.onclick = () => {
+        if (window.SFX) SFX.click();
+        currentVariant = 'random_10'; 
+        draftLimit = 0; 
+        ppGlobalMode = true;
+        document.getElementById('modal-pp-variant-selection').style.display = 'none';
+        document.getElementById('modal-game-selection').style.display = 'flex';
         document.getElementById('sub-mode-selection').style.display = 'block';
     };
 }
@@ -1848,8 +1870,15 @@ let ppState_ui = {
     p2Judgments: []
 };
 
+// GLOBAL PARADOX (Variant 2: Random 10) STATE
+let ppGlobalMode = false; 
+let ppRandomIndex = 0;
+let ppRandomGames = [];
+let ppDecisions = { p1: null, p2: null }; 
+
 function startPriceParadoxPhase() {
-    console.log("Starting Price Paradox Phase...");
+    console.log("Starting Price Paradox Phase (Tactical)...");
+    ppGlobalMode = false;
     document.getElementById("draft-phase").style.display = "none";
     const ppPhase = document.getElementById("pp-phase");
     if (ppPhase) ppPhase.style.display = "flex";
@@ -1862,7 +1891,40 @@ function startPriceParadoxPhase() {
     renderPPBoard();
 }
 
+function startPPRandomPhase() {
+    console.log("Starting Global Paradox Phase (Random 10)...");
+    ppGlobalMode = true;
+    ppRandomIndex = 0;
+    ppDecisions = { p1: null, p2: null };
+    
+    // Pick 10 random games from library for both
+    if (!myRoomData.isOnline || amILeader) {
+        ppRandomGames = shuffleArray([...masterGameLibrary]).slice(0, 10);
+        if (myRoomData.isOnline) {
+            socket.emit('hl-start-game', {
+                roomId: myRoomData.roomId,
+                isPP: true, // Reuse the start event to sync the 10 games
+                games: ppRandomGames
+            });
+        }
+    }
+
+    document.getElementById("draft-phase").style.display = "none";
+    const ppPhase = document.getElementById("pp-phase");
+    if (ppPhase) ppPhase.style.display = "flex";
+    
+    renderPPBoard();
+}
+
 function renderPPBoard() {
+    if (ppGlobalMode) {
+        renderPPBoardGlobal();
+    } else {
+        renderPPBoardTactical();
+    }
+}
+
+function renderPPBoardTactical() {
     if (ppState_ui.turnIndex >= 6) { 
         showPPSummary();
         return;
@@ -1871,7 +1933,6 @@ function renderPPBoard() {
     const isP1Turn = (ppState_ui.turnIndex % 2 === 0);
     const activeJudgeRole = isP1Turn ? "p1" : "p2";
     
-    // Who is judging right now?
     const internalListIndex = Math.floor(ppState_ui.turnIndex / 2);
     const listToJudge = isP1Turn ? gameState.player2.draftedForP1 : gameState.player1.draftedForP2;
     const activeGameId = listToJudge[internalListIndex];
@@ -1879,14 +1940,12 @@ function renderPPBoard() {
 
     if (!game) {
         ppState_ui.turnIndex++;
-        renderPPBoard();
+        renderPPBoardTactical();
         return;
     }
 
     const titleEl = document.getElementById("pp-title");
     const subtEl = document.getElementById("pp-subtitle");
-    
-    // Check if it is the current user's turn
     let isMyTurn = !myRoomData.isOnline || (myIdentity === activeJudgeRole);
 
     if (myRoomData.isOnline) {
@@ -1914,24 +1973,65 @@ function renderPPBoard() {
     activeCard.style.border = `2px solid ${isP1Turn ? "var(--neon-p1)" : "var(--neon-p2)"}`;
     activeCard.style.boxShadow = `0 0 15px ${isP1Turn ? "var(--neon-p1)" : "var(--neon-p2)"}`;
 
-    // Update buttons
+    setupPPControls(isMyTurn);
+}
+
+function renderPPBoardGlobal() {
+    if (ppRandomIndex >= ppRandomGames.length) {
+        showPPSummary();
+        return;
+    }
+
+    const game = ppRandomGames[ppRandomIndex];
+    const titleEl = document.getElementById("pp-title");
+    const subtEl = document.getElementById("pp-subtitle");
+    
+    titleEl.innerText = `GLOBAL PARADOX: ${ppRandomIndex + 1}/10`;
+    subtEl.innerText = "Hidden until both decide...";
+    titleEl.style.color = "var(--text-main)";
+
+    document.getElementById("pp-active-img").src = game.background_image || "";
+    document.getElementById("pp-active-name").innerText = game.name;
+    document.getElementById("pp-stamp-container").style.display = "none";
+
+    const activeCard = document.getElementById("pp-active-card");
+    activeCard.style.border = "2px solid var(--accent)";
+    activeCard.style.boxShadow = "0 0 15px var(--accent-glow)";
+
+    let isMyTurn = false;
+    if (myRoomData.isOnline) {
+        isMyTurn = ppDecisions[myIdentity] === null;
+        if (!isMyTurn) {
+            subtEl.innerText = "Waiting for other player...";
+        }
+    } else {
+        // Local mode: Swap logic
+        if (ppDecisions.p1 === null) {
+            subtEl.innerText = `${getPlayerName('p1')}'S CHOICE`;
+            isMyTurn = true;
+        } else if (ppDecisions.p2 === null) {
+            subtEl.innerText = `${getPlayerName('p2')}'S CHOICE`;
+            isMyTurn = true;
+        }
+    }
+
+    setupPPControls(isMyTurn);
+}
+
+function setupPPControls(isEnabled) {
     const btnB = document.getElementById("pp-btn-buy");
     const btnS = document.getElementById("pp-btn-sale");
     const btnK = document.getElementById("pp-btn-skip");
 
-    const controls = [btnB, btnS, btnK];
-    controls.forEach(btn => {
+    [btnB, btnS, btnK].forEach(btn => {
         if (!btn) return;
-        btn.style.opacity = isMyTurn ? "1" : "0.5";
-        btn.style.cursor = isMyTurn ? "pointer" : "not-allowed";
-        
-        // Remove old listeners to prevent double-firings or stale closures
+        btn.style.opacity = isEnabled ? "1" : "0.5";
+        btn.style.cursor = isEnabled ? "pointer" : "not-allowed";
         const newBtn = btn.cloneNode(true);
         btn.parentNode.replaceChild(newBtn, btn);
     });
 
-    if (isMyTurn) {
-        // Re-grab the new clones to add listeners
+    if (isEnabled) {
         document.getElementById("pp-btn-buy").onclick = () => assignPPFate("buy");
         document.getElementById("pp-btn-sale").onclick = () => assignPPFate("sale");
         document.getElementById("pp-btn-skip").onclick = () => assignPPFate("skip");
@@ -1948,26 +2048,122 @@ function assignPPFate(fate) {
                 isPP: true,
                 actor: myIdentity,
                 decision: fate,
-                index: ppState_ui.turnIndex
+                index: ppGlobalMode ? ppRandomIndex : ppState_ui.turnIndex,
+                isGlobal: ppGlobalMode
             });
         }
     } else {
-        handlePPDecisionSync({ actor: (ppState_ui.turnIndex % 2 === 0 ? "p1" : "p2"), decision: fate, index: ppState_ui.turnIndex });
+        // Local mode
+        const data = { 
+            actor: ppGlobalMode ? (ppDecisions.p1 === null ? 'p1' : 'p2') : (ppState_ui.turnIndex % 2 === 0 ? 'p1' : 'p2'), 
+            decision: fate, 
+            index: ppGlobalMode ? ppRandomIndex : ppState_ui.turnIndex,
+            isGlobal: ppGlobalMode
+        };
+        handlePPDecisionSync(data);
     }
 }
 
 function handlePPDecisionSync(data) {
+    if (ppGlobalMode) {
+        handlePPGlobalSync(data);
+    } else {
+        handlePPTacticalSync(data);
+    }
+}
+
+function handlePPTacticalSync(data) {
     if (window.SFX && data.actor !== myIdentity) SFX.correct();
 
     const stampContainer = document.getElementById("pp-stamp-container");
     stampContainer.style.display = "flex";
     const stamp = document.getElementById("pp-stamp");
     
-    if (data.decision === "buy") {
+    applyPPStampStyle(stamp, data.decision);
+    
+    stamp.style.animation = "none";
+    void stamp.offsetWidth; 
+    stamp.style.animation = "pop-in 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards";
+
+    if (data.index % 2 === 0) ppState_ui.p1Judgments.push(data.decision);
+    else ppState_ui.p2Judgments.push(data.decision);
+
+    setTimeout(() => {
+        ppState_ui.turnIndex++;
+        renderPPBoard();
+    }, 2500);
+}
+
+function handlePPGlobalSync(data) {
+    ppDecisions[data.actor] = data.decision;
+
+    // Check if both have decided
+    if (ppDecisions.p1 && ppDecisions.p2) {
+        revealPPGlobalDecisions();
+    } else {
+        renderPPBoard();
+    }
+}
+
+function revealPPGlobalDecisions() {
+    const stampContainer = document.getElementById("pp-stamp-container");
+    stampContainer.style.display = "flex";
+    stampContainer.innerHTML = ""; // Clear for dual stamps
+    stampContainer.style.transform = "none"; // Reset rotation for layout
+    stampContainer.style.flexDirection = "column";
+    stampContainer.style.gap = "10px";
+
+    const createStamp = (role, decision) => {
+        const div = document.createElement("div");
+        div.style.fontFamily = "var(--font-head)";
+        div.style.fontSize = "22px";
+        div.style.fontWeight = "900";
+        div.style.background = "rgba(0,0,0,0.8)";
+        div.style.padding = "5px 15px";
+        div.style.borderRadius = "8px";
+        div.style.textTransform = "uppercase";
+        div.style.border = "3px solid";
+        
+        const pName = getPlayerName(role);
+        let color = "#fff";
+        let text = "";
+        if(decision === 'buy') { color = "#00ff64"; text = "BUY"; }
+        if(decision === 'sale') { color = "#ffd700"; text = "SALE"; }
+        if(decision === 'skip') { color = "#ff0050"; text = "SKIP"; }
+        
+        div.style.borderColor = color;
+        div.style.color = color;
+        div.innerHTML = `<span style="color:#fff; font-size:12px; display:block;">${pName}</span> ${text}`;
+        div.style.animation = "pop-in 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards";
+        return div;
+    };
+
+    stampContainer.appendChild(createStamp('p1', ppDecisions.p1));
+    stampContainer.appendChild(createStamp('p2', ppDecisions.p2));
+
+    if (window.SFX) SFX.correct();
+
+    // Cache results for summary
+    ppState_ui.p1Judgments.push(ppDecisions.p1);
+    ppState_ui.p2Judgments.push(ppDecisions.p2);
+
+    setTimeout(() => {
+        ppRandomIndex++;
+        ppDecisions = { p1: null, p2: null };
+        // Clean up stamp container for next turn
+        stampContainer.innerHTML = '<div id="pp-stamp" style="font-family: var(--font-head); font-size: 32px; font-weight: 900; background: rgba(0,0,0,0.8); padding: 10px 20px; border: 4px solid #ffd700; border-radius: 10px; text-transform: uppercase;">BUY</div>';
+        stampContainer.style.flexDirection = "row";
+        stampContainer.style.transform = "rotate(-15deg)";
+        renderPPBoard();
+    }, 4000);
+}
+
+function applyPPStampStyle(stamp, decision) {
+    if (decision === 'buy') {
         stamp.innerText = "BUY IT";
         stamp.style.border = "4px solid #00ff64";
         stamp.style.color = "#00ff64";
-    } else if (data.decision === "sale") {
+    } else if (decision === 'sale') {
         stamp.innerText = "WAIT FOR SALE";
         stamp.style.border = "4px solid #ffd700";
         stamp.style.color = "#ffd700";
@@ -1976,22 +2172,6 @@ function handlePPDecisionSync(data) {
         stamp.style.border = "4px solid #ff0050";
         stamp.style.color = "#ff0050";
     }
-    
-    stamp.style.animation = "none";
-    void stamp.offsetWidth; 
-    stamp.style.animation = "pop-in 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards";
-
-    const isP1Turn = (data.index % 2 === 0);
-    if (isP1Turn) {
-        ppState_ui.p1Judgments.push(data.decision);
-    } else {
-        ppState_ui.p2Judgments.push(data.decision);
-    }
-
-    setTimeout(() => {
-        ppState_ui.turnIndex++;
-        renderPPBoard();
-    }, 2500);
 }
 
 function showPPSummary() {
@@ -2031,15 +2211,16 @@ function showPPSummary() {
 
     const drawGrid = (judgments, list, gridId) => {
         const grid = document.getElementById(gridId);
-        list.forEach((gameId, i) => {
-            const game = masterGameLibrary.find(g => Number(g.id) === Number(gameId));
+        if (!list) return;
+        list.forEach((gameIdOrObj, i) => {
+            const game = (typeof gameIdOrObj === 'object') ? gameIdOrObj : masterGameLibrary.find(g => Number(g.id) === Number(gameIdOrObj));
             if(!game) return;
             const decision = judgments[i];
             let badgeColor = "var(--text-dim)";
             let decisionTxt = "---";
-            if(decision === "buy") { badgeColor = "#00ff64"; decisionTxt = "BUY IT"; }
-            if(decision === "sale") { badgeColor = "#ffd700"; decisionTxt = "WAIT FOR SALE"; }
-            if(decision === "skip") { badgeColor = "#ff0050"; decisionTxt = "SKIP IT"; }
+            if(decision === 'buy') { badgeColor = "#00ff64"; decisionTxt = "BUY IT"; }
+            if(decision === 'sale') { badgeColor = "#ffd700"; decisionTxt = "WAIT FOR SALE"; }
+            if(decision === 'skip') { badgeColor = "#ff0050"; decisionTxt = "SKIP IT"; }
             
             grid.innerHTML += `
                <div class="game-card" style="width:140px; height:200px; flex-direction:column; border: 2px solid ${badgeColor}; cursor:default;">
@@ -2052,8 +2233,13 @@ function showPPSummary() {
         });
     };
 
-    drawGrid(ppState_ui.p1Judgments, gameState.player2.draftedForP1, "pp-p1-grid");
-    drawGrid(ppState_ui.p2Judgments, gameState.player1.draftedForP2, "pp-p2-grid");
+    if (ppGlobalMode) {
+        drawGrid(ppState_ui.p1Judgments, ppRandomGames, 'pp-p1-grid');
+        drawGrid(ppState_ui.p2Judgments, ppRandomGames, 'pp-p2-grid');
+    } else {
+        drawGrid(ppState_ui.p1Judgments, gameState.player2.draftedForP1, 'pp-p1-grid');
+        drawGrid(ppState_ui.p2Judgments, gameState.player1.draftedForP2, 'pp-p2-grid');
+    }
 
     const endRow = document.createElement("div");
     endRow.style.width = "100%";

@@ -119,6 +119,10 @@ function finalizeGameStart() {
             }
             setupHLRound();
         }
+    } else if (gameState.phase === "price_paradox" && currentVariant === "random_10") {
+        document.getElementById('draft-phase').style.display = 'none';
+        startPPRandomPhase();
+        return;
     } else {
         // Drafting Mode (Keep/Kill)
         document.getElementById('draft-phase').style.display = 'block';

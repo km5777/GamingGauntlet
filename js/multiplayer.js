@@ -144,7 +144,18 @@ function connectMultiplayer() {
     // 3. Everyone receives the start games
     socket.on('hl-init-games', (data) => {
         console.log("Sync data received from leader:", data);
-        // Force the data into the variables
+
+        if (data.isPP) {
+            ppRandomGames = data.games;
+            if (!amILeader) {
+                // Ensure late-joiners or guests are in the right phase
+                document.getElementById('draft-phase').style.display = 'none';
+                startPPRandomPhase();
+            }
+            return;
+        }
+
+        // Force the data into the variables for Higher/Lower
         hlState.currentStandardGame = data.std;
         hlState.nextGame = data.next;
         gameState.turn = data.turn || 'p1';
