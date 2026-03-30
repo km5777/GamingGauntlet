@@ -33,9 +33,16 @@ const socket = {
         // to mimic the server's behavior of broadcasting back to the sender.
         if (amILeader && [
             'start-game-request', 
+            'hl-start-game',
             'player-ready-draft', 
             'request-library-sync', 
-            'hl-request-resync'
+            'hl-request-resync',
+            'init-online-game',
+            'start-duel-phase',
+            'room-updated',
+            'update-draft-status',
+            'hl-init-games',
+            'hl-next-game-sync'
         ].includes(event)) {
             setTimeout(() => this._trigger(event, data), 0);
         }
