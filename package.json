@@ -1,19 +1,17 @@
 {
   "name": "gaminggauntlet",
-  "version": "1.0.0",
-  "description": "",
-  "main": "server.js",
+  "version": "1.1.0",
+  "description": "A peer-to-peer multiplayer card game using PeerJS.",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "node server.js"
+    "start": "python -m http.server 8080",
+    "dev": "python -m http.server 8080"
   },
-  "keywords": [],
+  "keywords": [
+    "game",
+    "p2p",
+    "peerjs"
+  ],
   "author": "",
   "license": "ISC",
-  "type": "commonjs",
-  "dependencies": {
-    "cors": "^2.8.6",
-    "express": "^5.2.1",
-    "socket.io": "^4.8.3"
-  }
+  "dependencies": {}
 }
