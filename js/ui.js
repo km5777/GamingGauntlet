@@ -405,6 +405,7 @@ function resetGameToMenu() {
     if (typeof phaseTransitionLock   !== 'undefined') phaseTransitionLock   = false;
     if (typeof hasReceivedStartDuel  !== 'undefined') hasReceivedStartDuel  = false;
     if (typeof matchAbortTimer       !== 'undefined' && matchAbortTimer) { clearTimeout(matchAbortTimer); matchAbortTimer = null; }
+    if (typeof clearHLWatchdog === 'function') clearHLWatchdog();
     if (guestSyncRetryInterval) { clearInterval(guestSyncRetryInterval); guestSyncRetryInterval = null; }
 
 
@@ -1198,7 +1199,14 @@ function makeHLGuess(choice) {
     }
 
     setTimeout(() => {
-        proceedHL();
+        // Only the leader (or offline) drives round progression.
+        // The guest waits for hl-receive-next from the leader.
+        if (!myRoomData.isOnline || amILeader) {
+            proceedHL();
+        } else {
+            // Guest: start watchdog — if hl-receive-next doesn't arrive, request resync
+            if (typeof startHLWatchdog === 'function') startHLWatchdog();
+        }
     }, 2000);
 }
 

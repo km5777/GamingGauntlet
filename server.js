@@ -197,6 +197,12 @@ io.on('connection', (socket) => {
         io.to(data.roomId).emit('hl-do-next-round');
     });
 
+    // Higher/Lower: Guest requests state resync from Leader
+    socket.on('hl-request-resync', (data) => {
+        if (!validateRelay(data, socket)) return;
+        socket.to(data.roomId).emit('hl-resync-request');
+    });
+
     // Keep/Kill: Attacker reveals a game to the defender
     socket.on('reveal-game', (data) => {
         if (!validateRelay(data, socket)) return;
