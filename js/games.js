@@ -64,7 +64,7 @@ async function loadGames() {
 
         const allResults = await Promise.all(requests);
         let bigList = allResults.flatMap(data => data.results || []);
-        
+
         if (bigList.length === 0) {
             bigList = [
                 { id: 1, name: "RAWG Error: Fallback 1", background_image: "", added: 3000, released: "2024-01-01" },
@@ -81,13 +81,15 @@ async function loadGames() {
         }
 
         masterGameLibrary = bigList.filter((game, index, self) =>
-            game.background_image !== null && game.added > 2500 &&
+            game.background_image &&
+            game.released && // FIX: Strictly reject games without release dates
+            game.added > 2500 &&
             index === self.findIndex((g) => g.id === game.id)
         ).map(game => ({
             id: game.id,
             name: game.name,
             background_image: game.background_image,
-            released: game.released || null
+            released: game.released
         }));
 
         shuffleArray(masterGameLibrary);
@@ -99,7 +101,7 @@ async function loadGames() {
         if (!myRoomData.isOnline) {
             finalizeGameStart();
         } else if (amILeader) {
-            socket.emit('sync-library', {
+            socket.emit('init-library', {
                 roomId: myRoomData.roomId,
                 library: masterGameLibrary,
                 pool: draftingPool,
@@ -148,7 +150,7 @@ function finalizeGameStart() {
             gameState.turn = 'p1';
 
             if (myRoomData.isOnline) {
-                socket.emit('hl-start-game', {
+                socket.emit('hl-init-games', { // FIX: Changed from hl-start-game
                     roomId: myRoomData.roomId,
                     std: hlState.currentStandardGame,
                     next: hlState.nextGame,

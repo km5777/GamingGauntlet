@@ -26,27 +26,39 @@ const socket = {
     _lastEmitWasLocal: false,
     emit(event, data) {
         this._lastEmitWasLocal = true;
+
+        // --- MULTIPLAYER TRANSLATION LAYER ---
+        // Redirect generic actions to their corresponding "Opponent" handlers
+        // so the original game logic doesn't have to be refactored.
         if (currentConn && currentConn.open) {
             currentConn.send({ type: event, payload: data });
         }
+
         // Host-side mirror: some events need to be handled locally by the leader
         // to mimic the server's behavior of broadcasting back to the sender.
         if (amILeader && [
-            'start-game-request', 
+            'start-game-request',
             'hl-start-game',
-            'player-ready-draft', 
-            'request-library-sync', 
+            'player-ready-draft',
+            'request-library-sync',
             'hl-request-resync',
             'init-online-game',
             'start-duel-phase',
             'room-updated',
             'update-draft-status',
             'hl-init-games',
-            'hl-next-game-sync'
+            'hl-next-game-sync',
+            'sync-library',
+            'init-library'
         ].includes(event)) {
-            setTimeout(() => this._trigger(event, data), 0);
+            this._isMirroring = true;
+            setTimeout(() => {
+                this._trigger(event, data);
+                this._isMirroring = false;
+            }, 0);
         }
     },
+    _isMirroring: false,
     _trigger(event, data) {
         if (this.handlers[event]) {
             this.handlers[event].forEach(cb => cb(data));
@@ -137,6 +149,7 @@ function initPeer(id, callback) {
 
     peer.on('error', (err) => {
         console.error('[PeerJS] Error:', err);
+        if (typeof setLobbyLoading === 'function') setLobbyLoading(false);
         if (err.type === 'unavailable-id') {
             showModal('ERROR', 'That room key is already in use. Try again.');
         } else if (err.type === 'peer-unavailable') {
@@ -163,7 +176,7 @@ function setupConnection(conn) {
 
     conn.on('open', () => {
         console.log('[PeerJS] Connection opened with:', conn.peer);
-        
+
         if (amILeader) {
             // Host: Send current room state to the guest
             socket.emit('identity-assigned', { role: 'p2', isLeader: false });
@@ -212,21 +225,26 @@ function handleDisconnect() {
     }
 }
 
-// --- SHIM EVENT REGISTRATION ---
-
 function registerMultiplayerEvents() {
+
+    // ── Interaction Bridges (Map user actions to game logic) ──
+    // These convert "I did X" packets into "My opponent did X" for the receiver.
+    socket.on('reveal-game', (data) => socket._trigger('opponent-revealed', data.game || data));
+    socket.on('decision-made', (data) => socket._trigger('opponent-decided', data));
+    socket.on('br-place-game', (data) => socket._trigger('br-opponent-placed', data));
+    socket.on('hl-guess-sync', (data) => socket._trigger('hl-sync-reveal', data));
 
     // ── Guest Join (Host only) ──
     socket.on('guest-join', (data) => {
         if (!amILeader) return;
         if (myRoomData.players.length >= 2) return;
 
-        const guestPlayer = { 
-            id: currentConn.peer, 
-            name: data.name, 
-            role: 'p2', 
-            isLeader: false, 
-            ready: false 
+        const guestPlayer = {
+            id: currentConn.peer,
+            name: data.name,
+            role: 'p2',
+            isLeader: false,
+            ready: false
         };
         myRoomData.players.push(guestPlayer);
 
@@ -250,11 +268,9 @@ function registerMultiplayerEvents() {
     // ── Player Ready Draft (Host only) ──
     socket.on('player-ready-draft', (data) => {
         if (!amILeader) return;
-        
+
         // Determine if this came from the Host (local) or Guest (remote)
-        const player = (socket._lastEmitWasLocal)
-            ? myRoomData.players.find(p => p.role === 'p1')
-            : myRoomData.players.find(p => p.role === 'p2');
+        const player = myRoomData.players.find(p => p.role === data.role);
 
         if (player) {
             player.ready = true;
@@ -298,6 +314,13 @@ function registerMultiplayerEvents() {
         myRoomData.isOnline = true;
     });
 
+    socket.on('leave-room', () => {
+        if (myRoomData.isOnline) {
+            showConnectionBanner('OPPONENT LEFT', 'warning');
+            resetLocalRoomState();
+        }
+    });
+
     socket.on('kicked', () => {
         resetLocalRoomState();
         showModal('REMOVED', 'You were kicked from the lobby by the Room Leader.');
@@ -332,7 +355,7 @@ function registerMultiplayerEvents() {
     socket.on('send-library-to-guest', () => {
         if (!amILeader) return;
         if (typeof masterGameLibrary !== 'undefined' && masterGameLibrary.length > 0) {
-            socket.emit('sync-library', {
+            socket.emit('init-library', {
                 library: masterGameLibrary,
                 pool: draftingPool,
                 ccCategory: ccState.category,
@@ -376,7 +399,7 @@ function registerMultiplayerEvents() {
         setupHLRound();
     });
 
-    socket.on('hl-receive-next', (data) => {
+    socket.on('hl-next-game-sync', (data) => {
         clearHLWatchdog();
         if (!amILeader) {
             if (data.std) hlState.currentStandardGame = data.std;
@@ -557,15 +580,26 @@ function registerMultiplayerEvents() {
 // ─── ROOM STATE RESET ────────────────────────────────────────────────────────
 
 function resetLocalRoomState() {
+    setLobbyLoading(false);
     phaseTransitionLock = false;
     hasReceivedStartDuel = false;
     clearHLWatchdog();
 
-    if (currentConn) currentConn.close();
-    if (peer) {
-        peer.destroy();
-        peer = null;
+    if (currentConn && currentConn.open) {
+        // Send a final explicit'leave' if possible
+        try {
+            currentConn.send({ type: 'leave-room', payload: {} });
+            currentConn.close();
+        } catch (e) { }
     }
+
+    // Delay destruction to allow final packets to clear
+    setTimeout(() => {
+        if (peer) {
+            peer.destroy();
+            peer = null;
+        }
+    }, 200);
 
     myRoomData = {
         roomId: null,
@@ -643,22 +677,42 @@ function renderLobby(roomId, players) {
 
 // ─── LOBBY BUTTON HANDLERS ───────────────────────────────────────────────────
 
+const leaveBtn = document.getElementById('leave-room-btn');
+if (leaveBtn) {
+    leaveBtn.onclick = () => resetLocalRoomState();
+}
+
+function setLobbyLoading(isLoading) {
+    const createBtn = document.getElementById('create-room-btn');
+    const joinBtn = document.getElementById('join-room-btn');
+    if (createBtn) {
+        createBtn.innerText = isLoading ? 'CONNECTING...' : 'CREATE ROOM';
+        createBtn.disabled = isLoading;
+    }
+    if (joinBtn) {
+        joinBtn.innerText = isLoading ? 'JOINING...' : 'JOIN';
+        joinBtn.disabled = isLoading;
+    }
+}
+
 document.getElementById('create-room-btn').onclick = () => {
     const name = document.getElementById('player-name-input').value.trim();
     if (!name) return showModal('ERROR', 'Enter a name first!');
 
+    setLobbyLoading(true);
     const roomId = Math.random().toString(36).substring(2, 7).toUpperCase();
     const peerId = 'GG-' + roomId;
 
-    initPeer(peerId, () => {
+    initPeer(peerId, (id) => {
+        if (!id) return;
         if (window.SFX) SFX.roomCreate();
         myIdentity = 'p1';
         amILeader = true;
         myRoomData.roomId = roomId;
         myRoomData.playerName = name;
         myRoomData.isOnline = true;
-        myRoomData.players = [{ id: peerId, name: name, isLeader: true, role: 'p1', ready: false }];
-        
+        myRoomData.players = [{ id: id, name: name, isLeader: true, role: 'p1', ready: false }];
+
         registerMultiplayerEvents();
         renderLobby(roomId, myRoomData.players);
     });
@@ -669,10 +723,12 @@ document.getElementById('join-room-btn').onclick = () => {
     const room = document.getElementById('join-room-input').value.trim().toUpperCase();
     if (!name || !room) return showModal('ERROR', 'Name and Room Key required!');
 
+    setLobbyLoading(true);
     myRoomData.playerName = name;
     myRoomData.roomId = room;
 
-    initPeer(null, () => {
+    initPeer(null, (id) => {
+        if (!id) return;
         const conn = peer.connect('GG-' + room);
         amILeader = false;
         myIdentity = 'p2';
@@ -680,11 +736,6 @@ document.getElementById('join-room-btn').onclick = () => {
         setupConnection(conn);
     });
 };
-
-const leaveBtn = document.getElementById('leave-room-btn');
-if (leaveBtn) {
-    leaveBtn.onclick = () => resetLocalRoomState();
-}
 
 // ─── START-GAME-REQUEST OVERRIDE ───
 // We need to override the logic that usually hits the server.

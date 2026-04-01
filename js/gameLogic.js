@@ -24,7 +24,7 @@ let ccState = {
 };
 
 let ppState = {
-    p1Choices: [], 
+    p1Choices: [],
     p2Choices: [],
     roundIndex: 0
 };
@@ -65,7 +65,7 @@ function proceedHL() {
     if (hlState.roundCount >= 20) {
         const winner = hlState.p1Score > hlState.p2Score ? getPlayerName('p1') : getPlayerName('p2');
         if (myRoomData.isOnline && amILeader) {
-             socket.emit('hl-next-game-sync', {
+            socket.emit('hl-next-game-sync', {
                 roomId: myRoomData.roomId,
                 round: 20,
                 p1Score: hlState.p1Score,
@@ -110,12 +110,17 @@ function handleConfirm() {
 
         document.getElementById('confirm-btn').disabled = true;
         document.getElementById('confirm-btn').innerText = "WAITING...";
-        socket.emit('player-ready-draft', { 
+        socket.emit('player-ready-draft', {
             roomId: myRoomData.roomId,
+            role: myIdentity,
             draftList: currentSelections.map(id => {
-                let g = masterGameLibrary.find(x => Number(x.id) === Number(id));
-                return g ? { id: Number(g.id), name: g.name, background_image: g.background_image } : null;
-            }).filter(g => g !== null)
+                let actualId = typeof id === 'object' && id !== null ? id.id : id;
+                let g = masterGameLibrary.find(x => Number(x.id) === Number(actualId));
+                // FIX: Send the FULL object so the other player can add it to their library
+                if (g) return g;
+                if (typeof id === 'object' && id !== null) return id;
+                return { id: Number(actualId), name: "Unknown Game", background_image: "" };
+            })
         });
     } else {
         // Local Mode Logic

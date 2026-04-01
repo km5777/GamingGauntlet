@@ -83,13 +83,13 @@ function startGlobalTimer(seconds, onTimeout) {
 function renderGameLibrary(games) {
     const lib = document.getElementById('game-library');
     if (!lib) return;
-    
+
     // Reset styles that might have been changed by Category Clash
     lib.style.display = '';
     lib.style.flexDirection = '';
     lib.style.width = '';
     lib.style.maxWidth = '';
-    
+
     lib.innerHTML = '';
     window.scrollTo(0, 0);
 
@@ -181,8 +181,11 @@ function showRevealPicker() {
         let list = (attackerRole === 'p1') ? gameState.player1.draftedForP2 : gameState.player2.draftedForP1;
 
         list.forEach((gameId) => {
-            const game = masterGameLibrary.find(g => Number(g.id) === Number(gameId));
-            if (!game) return;
+            const actualId = typeof gameId === 'object' && gameId !== null ? gameId.id : gameId;
+            let game = masterGameLibrary.find(g => Number(g.id) === Number(actualId));
+            if (!game) {
+                game = { id: actualId, name: "Unknown Game", background_image: "" };
+            }
 
             const card = document.createElement('div');
             card.className = 'reveal-choice-card';
@@ -205,9 +208,8 @@ function showRevealPicker() {
 
                 if (myRoomData.isOnline) {
                     socket.emit('reveal-game', { roomId: myRoomData.roomId, game });
-                } else {
-                    startDecisionTurn(game);
                 }
+                startDecisionTurn(game); // FIX: Run locally for online mode too
             };
             container.appendChild(card);
         });
@@ -222,17 +224,18 @@ function showRevealPicker() {
             // Safety: don't splice or emit if the list is somehow empty
             if (!list || list.length === 0) return;
 
-            const idx  = Math.floor(Math.random() * list.length);
-            // Use Number() consistently to avoid type mismatch returning undefined
-            const game = masterGameLibrary.find(g => Number(g.id) === Number(list[idx]));
-            if (!game) return;
+            const idx = Math.floor(Math.random() * list.length);
+            const actualId = typeof list[idx] === 'object' && list[idx] !== null ? list[idx].id : list[idx];
+            let game = masterGameLibrary.find(g => Number(g.id) === Number(actualId));
+            if (!game) {
+                game = { id: actualId, name: "Unknown Game", background_image: "" };
+            }
             list.splice(idx, 1);
 
             if (myRoomData.isOnline && socket) {
                 socket.emit('reveal-game', { roomId: myRoomData.roomId, game });
-            } else {
-                startDecisionTurn(game);
             }
+            startDecisionTurn(game); // FIX: Run locally for online mode too
         });
     } else {
         document.getElementById('duel-status').innerText = `WAITING FOR ${getPlayerName(attackerRole)} TO PICK...`;
@@ -280,9 +283,8 @@ function startDecisionTurn(game) {
 
             if (myRoomData.isOnline && socket) {
                 socket.emit('decision-made', { roomId: myRoomData.roomId, choice: forcedChoice, game: game });
-            } else {
-                handleChoice(forcedChoice, game);
             }
+            handleChoice(forcedChoice, game);
         }
     });
 }
@@ -306,12 +308,9 @@ function handleChoiceWithLimitCheck(choice, game) {
 
     // If we reach here, the move is LEGAL. 
     if (myRoomData.isOnline && socket) {
-        // Only the defender sends this. The server will tell everyone the result.
         socket.emit('decision-made', { roomId: myRoomData.roomId, choice: choice, game: game });
-    } else {
-        // Local mode
-        handleChoice(choice, game);
     }
+    handleChoice(choice, game);
 }
 
 // --- THE CORE FIX ---
@@ -362,7 +361,7 @@ function updateVisualGrid(playerID, type, game, index) {
     const slotId = `${playerID}-grid-${type}-${index}`;
     const slot = document.getElementById(slotId);
     if (slot) {
-        slot.innerHTML = `<img src="${game.background_image}" style="animation: slamReveal 0.3s ease; width:100%; height:100%; object-fit:cover;">`;
+        slot.innerHTML = `<img src="${game.background_image || ''}" style="animation: slamReveal 0.3s ease; width:100%; height:100%; object-fit:cover;">`;
     }
 }
 
@@ -401,10 +400,10 @@ function showModal(title, message) {
 
 function resetGameToMenu() {
     // Reset all game-start guards (games.js + multiplayer.js variables)
-    if (typeof gameHasStarted        !== 'undefined') gameHasStarted        = false;
-    if (typeof phaseTransitionLock   !== 'undefined') phaseTransitionLock   = false;
-    if (typeof hasReceivedStartDuel  !== 'undefined') hasReceivedStartDuel  = false;
-    if (typeof matchAbortTimer       !== 'undefined' && matchAbortTimer) { clearTimeout(matchAbortTimer); matchAbortTimer = null; }
+    if (typeof gameHasStarted !== 'undefined') gameHasStarted = false;
+    if (typeof phaseTransitionLock !== 'undefined') phaseTransitionLock = false;
+    if (typeof hasReceivedStartDuel !== 'undefined') hasReceivedStartDuel = false;
+    if (typeof matchAbortTimer !== 'undefined' && matchAbortTimer) { clearTimeout(matchAbortTimer); matchAbortTimer = null; }
     if (typeof clearHLWatchdog === 'function') clearHLWatchdog();
     if (guestSyncRetryInterval) { clearInterval(guestSyncRetryInterval); guestSyncRetryInterval = null; }
 
@@ -442,6 +441,11 @@ function resetGameToMenu() {
     if (draft) draft.style.display = 'block';
     if (menu) menu.style.display = 'flex';
     if (leaveBtn) leaveBtn.style.display = 'none'; // Hide leave button on menu
+
+    if (typeof myRoomData !== 'undefined' && myRoomData.isOnline) {
+        const lobbyModal = document.getElementById('modal-online-rooms');
+        if (lobbyModal) lobbyModal.style.display = 'flex';
+    }
 
     const loadingOverlay = document.getElementById('loading-screen');
     if (loadingOverlay) loadingOverlay.style.display = 'none';
@@ -488,7 +492,7 @@ document.getElementById('open-online-btn').onclick = () => {
 };
 function setActiveMode(activeId) {
     const modes = [
-        'mode-keep-kill', 'mode-higher-lower', 'mode-blind-ranking', 
+        'mode-keep-kill', 'mode-higher-lower', 'mode-blind-ranking',
         'mode-category-clash', 'mode-keep-cut-upgrade', 'mode-oup', 'mode-price-paradox'
     ];
     modes.forEach(id => {
@@ -506,18 +510,18 @@ let selectionHistory = [];
 function showSelectionStep(stepId, title) {
     document.querySelectorAll(".selection-step").forEach(s => s.style.display = "none");
     const targetStep = document.getElementById(stepId);
-    if(targetStep) targetStep.style.display = "block";
+    if (targetStep) targetStep.style.display = "block";
 
     const titleEl = document.getElementById("gauntlet-modal-title");
-    if(titleEl && title) titleEl.innerText = title;
+    if (titleEl && title) titleEl.innerText = title;
 
     const backBtn = document.getElementById("gauntlet-back-btn");
     if (stepId === "step-mode-selection") {
         selectionHistory = [];
-        if(backBtn) backBtn.style.display = "none";
-        if(titleEl) titleEl.innerText = "SELECT CHALLENGE";
+        if (backBtn) backBtn.style.display = "none";
+        if (titleEl) titleEl.innerText = "SELECT CHALLENGE";
     } else {
-        if(backBtn) backBtn.style.display = "block";
+        if (backBtn) backBtn.style.display = "block";
         if (!selectionHistory.includes(stepId)) {
             selectionHistory.push(stepId);
         }
@@ -525,7 +529,7 @@ function showSelectionStep(stepId, title) {
 }
 
 const gauntletBackBtn = document.getElementById("gauntlet-back-btn");
-if(gauntletBackBtn) {
+if (gauntletBackBtn) {
     gauntletBackBtn.onclick = () => {
         if (window.SFX) window.SFX.click();
         selectionHistory.pop();
@@ -560,7 +564,7 @@ document.getElementById('variant-random').onclick = () => {
 // Must be lowercase 'search'
 document.getElementById('variant-search').onclick = () => {
     if (window.SFX) SFX.click();
-    currentVariant = 'search'; 
+    currentVariant = 'search';
     showSelectionStep("step-play-options", "CHOOSE ARENA");
 };
 
@@ -577,7 +581,7 @@ if (brModeBtn) {
     brModeBtn.onclick = () => {
         if (window.SFX) SFX.click();
         gameState.phase = "blind_ranking";
-        currentVariant = 'search'; 
+        currentVariant = 'search';
         setActiveMode('mode-blind-ranking');
         showSelectionStep("step-br-limits", "RANKING LIMITS");
     };
@@ -588,7 +592,7 @@ if (ccModeBtn) {
     ccModeBtn.onclick = () => {
         if (window.SFX) SFX.click();
         gameState.phase = "category_clash";
-        currentVariant = 'search'; 
+        currentVariant = 'search';
         draftLimit = 5;
         setActiveMode('mode-category-clash');
         showSelectionStep("step-play-options", "CATEGORY CLASH");
@@ -600,8 +604,8 @@ if (kcuModeBtn) {
     kcuModeBtn.onclick = () => {
         if (window.SFX) SFX.click();
         gameState.phase = "keep_cut_upgrade";
-        currentVariant = 'search'; 
-        draftLimit = 3; 
+        currentVariant = 'search';
+        draftLimit = 3;
         setActiveMode('mode-keep-cut-upgrade');
         showSelectionStep("step-play-options", "THE TRINITY VERDICT");
     };
@@ -612,8 +616,8 @@ if (oupModeBtn) {
     oupModeBtn.onclick = () => {
         if (window.SFX) SFX.click();
         gameState.phase = "oup";
-        currentVariant = 'search'; 
-        draftLimit = 5; 
+        currentVariant = 'search';
+        draftLimit = 5;
         setActiveMode('mode-oup');
         showSelectionStep("step-play-options", "THE RATING SCALES");
     };
@@ -633,7 +637,7 @@ const ppTacticalBtn = document.getElementById('pp-variant-tactical');
 if (ppTacticalBtn) {
     ppTacticalBtn.onclick = () => {
         if (window.SFX) SFX.click();
-        currentVariant = 'search'; 
+        currentVariant = 'search';
         draftLimit = 3;
         ppGlobalMode = false;
         showSelectionStep("step-play-options", "THE PRICE PARADOX");
@@ -644,8 +648,8 @@ const ppGlobalBtn = document.getElementById('pp-variant-global');
 if (ppGlobalBtn) {
     ppGlobalBtn.onclick = () => {
         if (window.SFX) SFX.click();
-        currentVariant = 'random_10'; 
-        draftLimit = 0; 
+        currentVariant = 'random_10';
+        draftLimit = 0;
         ppGlobalMode = true;
         showSelectionStep("step-play-options", "GLOBAL PARADOX");
     };
@@ -676,14 +680,14 @@ document.getElementById('play-local-btn').onclick = () => {
         document.getElementById('modal-category-prompt').style.display = 'flex';
     } else {
         closeModals();
-        loadGames(); 
+        loadGames();
     }
 };
 
 document.getElementById('cc-confirm-setup-btn').onclick = () => {
     const topic = document.getElementById('cc-category-input').value.trim();
     if (!topic || topic.length < 2) return showModal("ERROR", "Please enter a valid category.");
-    
+
     ccState.category = topic;
     closeModals();
 
@@ -976,13 +980,17 @@ function renderCCDraftGrid() {
     lib.style.width = '100%';
     lib.style.maxWidth = '600px';
 
-    for(let i=0; i<5; i++) {
+    for (let i = 0; i < 5; i++) {
         const slot = document.createElement('div');
         slot.className = 'br-slot';
-        
+
         const gameId = currentSelections[i];
         if (gameId) {
-            const game = masterGameLibrary.find(g => g.id === gameId);
+            const actualId = typeof gameId === 'object' && gameId !== null ? gameId.id : gameId;
+            let game = masterGameLibrary.find(g => Number(g.id) === Number(actualId));
+            if (!game) {
+                game = { id: actualId, name: "Unknown Game", background_image: "" };
+            }
             slot.innerHTML = `
                 <div class="br-slot-num">${i + 1}</div>
                 <div class="br-slot-content" style="cursor:pointer;" title="Click to remove">
@@ -1009,22 +1017,23 @@ function promptRankSelection(game) {
     if (window.SFX) window.SFX.popup();
     const modal = document.getElementById('modal-cc-rank-chooser');
     if (!modal) return;
-    
+
     document.getElementById('cc-rank-game-target').innerText = game.name;
     const container = document.getElementById('cc-rank-buttons-container');
     container.innerHTML = '';
-    
+
     // Ensure array is size 5
-    while(currentSelections.length < 5) currentSelections.push(null);
+    while (currentSelections.length < 5) currentSelections.push(null);
 
     for (let i = 0; i < 5; i++) {
         const existingId = currentSelections[i];
         let label = `PLACE IN RANK ${i + 1}`;
         let btnCls = 'glow-btn';
         if (existingId) {
-            const extGame = masterGameLibrary.find(g => g.id === existingId);
+            const actualId = typeof existingId === 'object' && existingId !== null ? existingId.id : existingId;
+            let extGame = masterGameLibrary.find(g => Number(g.id) === Number(actualId));
             label = `REPLACE RANK ${i + 1} (${extGame ? extGame.name : 'Filled'})`;
-            btnCls = 'glow-btn cancel-btn'; 
+            btnCls = 'glow-btn cancel-btn';
         }
 
         const btn = document.createElement('button');
@@ -1035,7 +1044,7 @@ function promptRankSelection(game) {
         btn.innerText = label;
 
         btn.onclick = () => {
-            currentSelections[i] = game.id; 
+            currentSelections[i] = game.id;
             const count = currentSelections.filter(x => x).length;
             document.getElementById('counter').innerText = `SELECTED: ${count} / ${draftLimit}`;
             document.getElementById('confirm-btn').disabled = (count !== draftLimit);
@@ -1045,7 +1054,7 @@ function promptRankSelection(game) {
         };
         container.appendChild(btn);
     }
-    
+
     modal.style.display = 'flex';
 }
 
@@ -1065,7 +1074,7 @@ function addGameFromSearch(game) {
         lib.style.flexDirection = '';
         lib.style.width = '';
         lib.style.maxWidth = '';
-        
+
         const card = document.createElement('div');
         card.className = 'game-card selected';
         card.innerHTML = `<img src="${game.background_image}"><h3>${game.name}</h3>`;
@@ -1237,7 +1246,7 @@ function setupBRGrids() {
 
         const slotsContainer = document.getElementById(`br-${p}-slots`);
         slotsContainer.innerHTML = '';
-        
+
         let isOpponent = false;
         if (myRoomData.isOnline && myIdentity !== p) isOpponent = true;
 
@@ -1245,7 +1254,7 @@ function setupBRGrids() {
             const slot = document.createElement('div');
             slot.className = 'br-slot';
             slot.id = `br-${p}-slot-${i}`;
-            
+
             if (isOpponent) {
                 slot.style.cursor = 'default';
                 slot.style.borderStyle = 'solid';
@@ -1254,11 +1263,11 @@ function setupBRGrids() {
             }
 
             slot.innerHTML = `<div class="br-slot-num">${i + 1}</div><div class="br-slot-content"></div>`;
-            
+
             slot.onclick = () => {
                 if (myRoomData.isOnline && myIdentity !== p) return;
                 if (!myRoomData.isOnline && gameState.turn !== p) return;
-                
+
                 if (window.SFX) SFX.rank();
                 tryPlaceBRGame(p, i);
             };
@@ -1276,7 +1285,7 @@ function drawNextBRGame(role) {
     if (pool.length === 0) {
         if (role === 'p1') brState.p1CurrentGame = null;
         else brState.p2CurrentGame = null;
-        
+
         if (!myRoomData.isOnline) {
             if (role === 'p1' && gameState.turn === 'p1') {
                 gameState.turn = 'p2';
@@ -1285,16 +1294,21 @@ function drawNextBRGame(role) {
                 return;
             }
         }
-        
+
         renderBRActiveGame(); // Forces the active card to safely blank out to 'WAITING FOR OPPONENT'
         checkBRFinished();
         return;
     }
-    
+
     const idx = Math.floor(Math.random() * pool.length);
     const gameId = pool.splice(idx, 1)[0];
-    const gameInfo = masterGameLibrary.find(g => g.id === gameId);
-    
+    const actualId = typeof gameId === 'object' && gameId !== null ? gameId.id : gameId;
+    let gameInfo = masterGameLibrary.find(g => Number(g.id) === Number(actualId));
+
+    if (!gameInfo) {
+        gameInfo = { id: actualId, name: "Unknown Game", background_image: "" };
+    }
+
     if (role === 'p1') brState.p1CurrentGame = gameInfo;
     else brState.p2CurrentGame = gameInfo;
 
@@ -1310,7 +1324,7 @@ function renderBRActiveGame() {
     }
 
     const game = activeRole === 'p1' ? brState.p1CurrentGame : brState.p2CurrentGame;
-    
+
     const status = document.getElementById('br-current-status');
     const cardImg = document.getElementById('br-active-img');
     const cardName = document.getElementById('br-active-name');
@@ -1334,7 +1348,7 @@ function tryPlaceBRGame(role, slotIndex) {
     if (!game) return;
 
     let ranking = role === 'p1' ? brState.p1Ranking : brState.p2Ranking;
-    if (ranking[slotIndex] !== null) return; 
+    if (ranking[slotIndex] !== null) return;
 
     ranking[slotIndex] = game;
     updateBRSlot(role, slotIndex, game);
@@ -1358,7 +1372,7 @@ function updateBRSlot(role, slotIndex, game) {
         let isMyGrid = false;
         if (myRoomData.isOnline && myIdentity === role) isMyGrid = true;
         if (!myRoomData.isOnline && gameState.turn === role) isMyGrid = true;
-        
+
         slotEl.querySelector('.br-slot-content').innerHTML = `
             <img src="${game.background_image || ''}" style="height: 50px; width: auto; max-width: 80px; object-fit: cover; border-radius: 4px;">
             <span style="font-size: 14px; font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding-left: 10px; width: 100%; color:var(--text-main);">${game.name}</span>
@@ -1373,7 +1387,7 @@ function updateBRSlot(role, slotIndex, game) {
 function checkBRFinished() {
     const p1Done = brState.p1Ranking.every(slot => slot !== null);
     const p2Done = brState.p2Ranking.every(slot => slot !== null);
-    
+
     if (p1Done && p2Done) {
         document.getElementById('br-current-status').innerText = "RANKING COMPLETE!";
         document.getElementById('br-active-reveal').innerHTML = '<h2 style="color:var(--neon-p1); font-family:var(--font-head); font-size: 32px; text-align:center; margin-top: 50px; text-shadow: 0 0 15px var(--neon-p1);">ALL DONE!</h2><button class="glow-btn pink" onclick="resetGameToMenu()" style="margin-top:20px;">BACK TO MENU</button>';
@@ -1385,14 +1399,14 @@ function checkBRFinished() {
 function startCategoryClashPhase() {
     document.getElementById('draft-phase').style.display = 'none';
     document.getElementById('cc-phase').style.display = 'block';
-    
+
     const uiTitle = document.getElementById('cc-topic-title');
     if (uiTitle && ccState.category) uiTitle.innerText = ccState.category.toUpperCase();
-    
+
     setupCCGrids();
     ccState.revealIndex = 4; // Start at bottom of list (rank 5)
     ccState.revealTurn = 'p1';
-    
+
     updateCCPlayerControls();
     if (window.SFX) window.SFX.popup();
 }
@@ -1402,12 +1416,12 @@ function setupCCGrids() {
         const slotsContainer = document.getElementById(`cc-${p}-slots`);
         if (!slotsContainer) return;
         slotsContainer.innerHTML = '';
-        
-        for (let i = 0; i < 5; i++) { 
+
+        for (let i = 0; i < 5; i++) {
             const slot = document.createElement('div');
             slot.className = 'br-slot cc-hidden-card';
             slot.id = `cc-${p}-slot-${i}`;
-            
+
             // Start Hidden
             slot.innerHTML = `<div class="br-slot-num">${i + 1}</div><div class="br-slot-content" style="justify-content:center; color:#8a8d98; font-style:italic;">HIDDEN</div>`;
             slotsContainer.appendChild(slot);
@@ -1420,43 +1434,43 @@ function updateCCPlayerControls() {
     // is always interactive after an incoming socket event updates state.
     isCCRevealing = false;
 
-    const isMyTurn  = (!myRoomData.isOnline) ? true : (myIdentity === ccState.revealTurn);
-    const btn       = document.getElementById('cc-reveal-btn');
+    const isMyTurn = (!myRoomData.isOnline) ? true : (myIdentity === ccState.revealTurn);
+    const btn = document.getElementById('cc-reveal-btn');
     const indicator = document.getElementById('cc-turn-indicator');
     if (!btn || !indicator) return;
 
     if (ccState.revealIndex < 0) {
         indicator.innerText = 'ALL RANKS REVEALED!';
-        btn.style.display   = 'none';
+        btn.style.display = 'none';
         if (!document.getElementById('cc-finish-btn')) {
             const finishBtn = document.createElement('button');
-            finishBtn.id        = 'cc-finish-btn';
+            finishBtn.id = 'cc-finish-btn';
             finishBtn.className = 'glow-btn pink';
             finishBtn.innerText = 'BACK TO MENU';
             finishBtn.style.marginTop = '20px';
-            finishBtn.onclick   = resetGameToMenu;
+            finishBtn.onclick = resetGameToMenu;
             indicator.parentNode.appendChild(finishBtn);
         }
         return;
     }
 
-    const rankNum   = ccState.revealIndex + 1;
+    const rankNum = ccState.revealIndex + 1;
     const actorName = getPlayerName(ccState.revealTurn);
 
     if (isMyTurn) {
         indicator.innerText = `YOUR TURN TO REVEAL RANK ${rankNum}`;
-        btn.innerText       = `REVEAL RANK ${rankNum}`;
-        btn.disabled        = false;
-        btn.style.opacity   = '1';
-        btn.style.display   = 'block';
+        btn.innerText = `REVEAL RANK ${rankNum}`;
+        btn.disabled = false;
+        btn.style.opacity = '1';
+        btn.style.display = 'block';
 
         btn.onclick = () => {
             // BUG FIX: isCCRevealing prevents a rapid double-click or a
             // lag-spike retransmission from firing the reveal twice, which
             // would cause the button to permanently vanish on the wrong player.
             if (isCCRevealing) return;
-            isCCRevealing   = true;
-            btn.disabled    = true;
+            isCCRevealing = true;
+            btn.disabled = true;
             btn.style.opacity = '0.5';
 
             const draftList = (ccState.revealTurn === 'p1')
@@ -1466,30 +1480,27 @@ function updateCCPlayerControls() {
 
             if (myRoomData.isOnline) {
                 socket.emit('hl-guess-sync', {
-                    roomId:     myRoomData.roomId,
+                    roomId: myRoomData.roomId,
                     isCCReveal: true,
-                    role:       ccState.revealTurn,
-                    index:      ccState.revealIndex,
+                    role: ccState.revealTurn,
+                    index: ccState.revealIndex,
                     gameId
                 });
-                // Do NOT touch btn.style.display here — let the incoming
-                // socket event drive the state update via updateCCPlayerControls()
-            } else {
-                const game = masterGameLibrary.find(g => Number(g.id) === Number(gameId));
-                ccRevealGameVisual(ccState.revealTurn, ccState.revealIndex, game);
-                if (ccState.revealTurn === 'p1') {
-                    ccState.revealTurn = 'p2';
-                } else {
-                    ccState.revealTurn = 'p1';
-                    ccState.revealIndex--;
-                }
-                // isCCRevealing is reset at the top of the next call
-                updateCCPlayerControls();
             }
+            // FIX: Always run the local visual update regardless of online/offline
+            const game = masterGameLibrary.find(g => Number(g.id) === Number(gameId));
+            ccRevealGameVisual(ccState.revealTurn, ccState.revealIndex, game);
+            if (ccState.revealTurn === 'p1') {
+                ccState.revealTurn = 'p2';
+            } else {
+                ccState.revealTurn = 'p1';
+                ccState.revealIndex--;
+            }
+            updateCCPlayerControls();
         };
     } else {
         indicator.innerText = `WAITING FOR ${actorName.toUpperCase()}...`;
-        btn.style.display   = 'none';
+        btn.style.display = 'none';
     }
 }
 
@@ -1536,26 +1547,29 @@ function renderKCUBoard() {
     const container = document.getElementById('kcu-cards-container');
     if (!container) return;
     container.innerHTML = '';
-    
+
     const isP1Turn = (kcuState.turn === 'p1');
     const listToJudge = isP1Turn ? gameState.player2.draftedForP1 : gameState.player1.draftedForP2;
-    
+
     document.getElementById('kcu-title').innerText = myRoomData.isOnline ? "FATE'S TRIFECTA" : `PLAYER ${isP1Turn ? 1 : 2}: CHOOSE THEIR FATE`;
     document.getElementById('kcu-subtitle').innerText = "Assign EXACTLY ONE fate to each game.";
 
     listToJudge.forEach((gameId) => {
-        const game = masterGameLibrary.find(g => Number(g.id) === Number(gameId));
-        if (!game) return;
+        const actualId = typeof gameId === 'object' && gameId !== null ? gameId.id : gameId;
+        let game = masterGameLibrary.find(g => Number(g.id) === Number(actualId));
+        if (!game) {
+            game = { id: actualId, name: "Unknown Game", background_image: "" };
+        }
 
         const card = document.createElement('div');
-        card.className = 'game-card br-slot empty'; 
+        card.className = 'game-card br-slot empty';
         card.style.height = '380px';
         card.style.flexDirection = 'column';
         card.style.position = 'relative';
         card.style.cursor = 'default';
         card.style.overflow = 'visible';
         card.style.border = '2px solid var(--border-subtle)';
-        
+
         card.innerHTML = `
             <img src="${game.background_image || ''}" style="width:100%; height:200px; object-fit:cover; border-radius:5px 5px 0 0;">
             <h3 style="padding:10px; font-size:16px; min-height:40px; margin:0; text-align:center;">${game.name}</h3>
@@ -1570,7 +1584,7 @@ function renderKCUBoard() {
 
         container.appendChild(card);
     });
-    
+
     document.getElementById('kcu-confirm-btn').style.display = 'none';
     updateKCUButtons();
 }
@@ -1579,7 +1593,7 @@ function assignFate(gameId, fate) {
     if (window.SFX) SFX.click();
     const isP1Turn = (kcuState.turn === 'p1');
     let choices = isP1Turn ? kcuState.p1Choices : kcuState.p2Choices;
-    
+
     // Remove if already assigned this exact fate
     if (choices[fate] === Number(gameId)) {
         choices[fate] = null;
@@ -1588,10 +1602,10 @@ function assignFate(gameId, fate) {
         if (choices.keep === Number(gameId)) choices.keep = null;
         if (choices.cut === Number(gameId)) choices.cut = null;
         if (choices.upgrade === Number(gameId)) choices.upgrade = null;
-        
+
         choices[fate] = Number(gameId);
     }
-    
+
     updateKCUButtons();
 }
 
@@ -1599,23 +1613,23 @@ function updateKCUButtons() {
     const isP1Turn = (kcuState.turn === 'p1');
     let choices = isP1Turn ? kcuState.p1Choices : kcuState.p2Choices;
     const listToJudge = isP1Turn ? gameState.player2.draftedForP1 : gameState.player1.draftedForP2;
-    
+
     listToJudge.forEach(gameId => {
         gameId = Number(gameId);
         const fate = choices.keep === gameId ? 'keep' : choices.cut === gameId ? 'cut' : choices.upgrade === gameId ? 'upgrade' : null;
         const badge = document.getElementById(`kcu-fate-badge-${gameId}`);
-        if(badge) {
+        if (badge) {
             if (fate) {
                 badge.style.display = 'block';
-                if(fate === 'keep') { badge.innerText = "🛡️ KEEP"; badge.style.background = "var(--correct)"; badge.style.color = "white"; badge.style.fontSize="12px";}
-                if(fate === 'cut') { badge.innerText = "❌ CUT"; badge.style.background = "var(--incorrect)"; badge.style.color = "white"; badge.style.fontSize="12px";}
-                if(fate === 'upgrade') { badge.innerText = "✨ UPGRADE"; badge.style.background = "var(--accent)"; badge.style.color = "white"; badge.style.fontSize="12px";}
+                if (fate === 'keep') { badge.innerText = "🛡️ KEEP"; badge.style.background = "var(--correct)"; badge.style.color = "white"; badge.style.fontSize = "12px"; }
+                if (fate === 'cut') { badge.innerText = "❌ CUT"; badge.style.background = "var(--incorrect)"; badge.style.color = "white"; badge.style.fontSize = "12px"; }
+                if (fate === 'upgrade') { badge.innerText = "✨ UPGRADE"; badge.style.background = "var(--accent)"; badge.style.color = "white"; badge.style.fontSize = "12px"; }
             } else {
                 badge.style.display = 'none';
             }
         }
     });
-    
+
     const confirmBtn = document.getElementById('kcu-confirm-btn');
     if (choices.keep && choices.cut && choices.upgrade) {
         confirmBtn.style.display = 'block';
@@ -1629,14 +1643,14 @@ document.getElementById('kcu-confirm-btn').onclick = () => {
     document.getElementById('kcu-confirm-btn').style.display = 'none';
     const isP1Turn = (kcuState.turn === 'p1');
     if (myRoomData.isOnline) {
-        if(isP1Turn) kcuState.p1Locked = true;
+        if (isP1Turn) kcuState.p1Locked = true;
         else kcuState.p2Locked = true;
-        
+
         const myChoices = isP1Turn ? kcuState.p1Choices : kcuState.p2Choices;
-        
+
         document.getElementById('kcu-subtitle').innerText = "WAITING ON OPPONENT...";
         document.getElementById('kcu-cards-container').innerHTML = '';
-        
+
         // Hijack br-place-game
         if (socket) {
             socket.emit('br-place-game', {
@@ -1668,7 +1682,7 @@ function showKCUSummary() {
     document.getElementById('kcu-title').innerText = "THE VERDICTS ARE IN";
     document.getElementById('kcu-subtitle').innerText = "";
     document.getElementById('kcu-confirm-btn').style.display = 'none';
-    
+
     const container = document.getElementById('kcu-cards-container');
     container.innerHTML = `<div style="display:flex; flex-direction:column; gap: 40px; width: 100%;">
         <div id="kcu-p1-summary" style="display:flex; flex-direction:column; align-items:center;">
@@ -1680,20 +1694,20 @@ function showKCUSummary() {
              <div id="kcu-p2-grid" style="display:flex; gap:20px;"></div>
         </div>
     </div>`;
-    
+
     const drawSummary = (choices, draftedList, gridId) => {
         const grid = document.getElementById(gridId);
         draftedList.forEach(gameId => {
             const game = masterGameLibrary.find(g => Number(g.id) === Number(gameId));
-            if(!game) return;
+            if (!game) return;
             const fate = choices.keep === Number(gameId) ? 'keep' : choices.cut === Number(gameId) ? 'cut' : choices.upgrade === Number(gameId) ? 'upgrade' : 'none';
-            
+
             let badgeHtml = "";
             let borderColor = "var(--border-subtle)";
-            if(fate === 'keep') { badgeHtml = "🛡️ KEEP"; borderColor = "var(--correct)"; }
-            if(fate === 'cut') { badgeHtml = "❌ CUT"; borderColor = "var(--incorrect)"; }
-            if(fate === 'upgrade') { badgeHtml = "✨ UPGRADE"; borderColor = "var(--accent)"; }
-            
+            if (fate === 'keep') { badgeHtml = "🛡️ KEEP"; borderColor = "var(--correct)"; }
+            if (fate === 'cut') { badgeHtml = "❌ CUT"; borderColor = "var(--incorrect)"; }
+            if (fate === 'upgrade') { badgeHtml = "✨ UPGRADE"; borderColor = "var(--accent)"; }
+
             grid.innerHTML += `
                <div class="game-card" style="width:200px; height:280px; flex-direction:column; border: 2px solid ${borderColor}; cursor:default;">
                    <img src="${game.background_image || ''}" style="width:100%; height:120px; object-fit:cover; border-radius:5px 5px 0 0;">
@@ -1704,7 +1718,7 @@ function showKCUSummary() {
             `;
         });
     };
-    
+
     // Player 1's choices on games handed by Player 2
     drawSummary(kcuState.p1Choices, gameState.player2.draftedForP1, 'kcu-p1-grid');
     // Player 2's choices on games handed by Player 1
@@ -1719,7 +1733,7 @@ function showKCUSummary() {
     mainBtn.className = 'glow-btn pink';
     mainBtn.innerText = 'MAIN MENU';
     mainBtn.onclick = () => {
-        if(window.SFX) SFX.click();
+        if (window.SFX) SFX.click();
         resetGameToMenu();
     };
     endRow.appendChild(mainBtn);
@@ -1728,7 +1742,7 @@ function showKCUSummary() {
 
 // --- OUP (Overrated, Underrated, Perfectly Rated) LOGIC ---
 let oupState = {
-    turnIndex: 0, 
+    turnIndex: 0,
     p1Judgments: [],
     p2Judgments: []
 };
@@ -1754,22 +1768,21 @@ function renderOUPBoard() {
 
     const isP1Turn = (oupState.turnIndex % 2 === 0);
     const activeJudge = isP1Turn ? 'p1' : 'p2';
-    
+
     const internalListIndex = Math.floor(oupState.turnIndex / 2);
-    
+
     const listToJudge = isP1Turn ? gameState.player2.draftedForP1 : gameState.player1.draftedForP2;
     const activeGameId = listToJudge[internalListIndex];
-    const game = masterGameLibrary.find(g => Number(g.id) === Number(activeGameId));
+    const actualId = typeof activeGameId === 'object' && activeGameId !== null ? activeGameId.id : activeGameId;
+    let game = masterGameLibrary.find(g => Number(g.id) === Number(actualId));
 
     if (!game) {
-        oupState.turnIndex++;
-        renderOUPBoard();
-        return;
+        game = { id: actualId, name: "Unknown Game", background_image: "" };
     }
 
     const titleEl = document.getElementById('oup-title');
     const subtEl = document.getElementById('oup-subtitle');
-    
+
     if (myRoomData.isOnline) {
         if (myIdentity === activeJudge) {
             titleEl.innerText = "YOUR TURN TO JUDGE";
@@ -1789,8 +1802,8 @@ function renderOUPBoard() {
 
     document.getElementById('oup-active-img').src = game.background_image || '';
     document.getElementById('oup-active-name').innerText = game.name;
-    document.getElementById('oup-stamp-container').style.display = 'none'; 
-    
+    document.getElementById('oup-stamp-container').style.display = 'none';
+
     const activeCard = document.getElementById('oup-active-card');
     activeCard.style.border = `2px solid ${isP1Turn ? 'var(--neon-p1)' : 'var(--neon-p2)'}`;
     activeCard.style.boxShadow = `0 0 15px ${isP1Turn ? 'var(--neon-p1)' : 'var(--neon-p2)'}`;
@@ -1803,11 +1816,13 @@ function renderOUPBoard() {
 
     // Simplified: Reset listeners once, then assign if it's my turn
     [btnU, btnP, btnO].forEach(btn => {
+        if (!btn) return;
         btn.style.opacity = isMyTurn ? '1' : '0.5';
         btn.style.cursor = isMyTurn ? 'pointer' : 'not-allowed';
-        btn.onclick = null; 
+        btn.style.pointerEvents = isMyTurn ? 'auto' : 'none'; // FIX: Re-enable clicking for the active player!
+        btn.onclick = null;
     });
-    
+
     if (isMyTurn) {
         btnU.onclick = () => assignOUPFate('underrated');
         btnP.onclick = () => assignOUPFate('perfect');
@@ -1817,20 +1832,26 @@ function renderOUPBoard() {
 
 function assignOUPFate(fate) {
     if (window.SFX) SFX.click();
-    
-    if (myRoomData.isOnline) {
-        if (socket) {
-            socket.emit('hl-guess-sync', {
-                roomId: myRoomData.roomId,
-                isOUP: true,
-                actor: myIdentity,
-                decision: fate,
-                index: oupState.turnIndex
-            });
-        }
-    } else {
-        handleOUPDecisionSync({ actor: (oupState.turnIndex % 2 === 0 ? 'p1' : 'p2'), decision: fate, index: oupState.turnIndex });
+
+    // FIX: Disable buttons immediately to prevent double-clicks
+    const btnU = document.getElementById('oup-btn-underrated');
+    const btnP = document.getElementById('oup-btn-perfect');
+    const btnO = document.getElementById('oup-btn-overrated');
+    if (btnU) btnU.style.pointerEvents = 'none';
+    if (btnP) btnP.style.pointerEvents = 'none';
+    if (btnO) btnO.style.pointerEvents = 'none';
+
+    if (myRoomData.isOnline && socket) {
+        socket.emit('hl-guess-sync', {
+            roomId: myRoomData.roomId,
+            isOUP: true,
+            actor: myIdentity,
+            decision: fate,
+            index: oupState.turnIndex
+        });
     }
+    // FIX: Apply locally
+    handleOUPDecisionSync({ actor: myRoomData.isOnline ? myIdentity : (oupState.turnIndex % 2 === 0 ? 'p1' : 'p2'), decision: fate, index: oupState.turnIndex });
 }
 
 function handleOUPDecisionSync(data) {
@@ -1839,7 +1860,7 @@ function handleOUPDecisionSync(data) {
     const stampContainer = document.getElementById('oup-stamp-container');
     stampContainer.style.display = 'flex';
     const stamp = document.getElementById('oup-stamp');
-    
+
     if (data.decision === 'overrated') {
         stamp.innerText = "OVERRATED";
         stamp.style.border = "4px solid var(--incorrect)";
@@ -1853,9 +1874,9 @@ function handleOUPDecisionSync(data) {
         stamp.style.border = "4px solid var(--correct)";
         stamp.style.color = "var(--correct)";
     }
-    
+
     stamp.style.animation = 'none';
-    void stamp.offsetWidth; 
+    void stamp.offsetWidth;
     stamp.style.animation = 'pop-in 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards';
 
     const isP1Turn = (data.index % 2 === 0);
@@ -1882,9 +1903,9 @@ function showOUPSummary() {
     document.getElementById('oup-controls').style.display = 'none';
 
     const container = document.querySelector('#oup-phase .centered-grid');
-    
+
     let summaryDiv = document.getElementById('oup-summary-div');
-    if(!summaryDiv) {
+    if (!summaryDiv) {
         summaryDiv = document.createElement('div');
         summaryDiv.id = "oup-summary-div";
         summaryDiv.style.width = "100%";
@@ -1910,14 +1931,14 @@ function showOUPSummary() {
         const grid = document.getElementById(gridId);
         list.forEach((gameId, i) => {
             const game = masterGameLibrary.find(g => Number(g.id) === Number(gameId));
-            if(!game) return;
+            if (!game) return;
             const fate = judgments[i];
             let badgeColor = "var(--text-dim)";
             let fateTxt = "---";
-            if(fate === 'overrated') { badgeColor = "var(--incorrect)"; fateTxt = "OVERRATED"; }
-            if(fate === 'underrated') { badgeColor = "var(--neon-p1)"; fateTxt = "UNDERRATED"; }
-            if(fate === 'perfect') { badgeColor = "var(--correct)"; fateTxt = "PERFECT"; }
-            
+            if (fate === 'overrated') { badgeColor = "var(--incorrect)"; fateTxt = "OVERRATED"; }
+            if (fate === 'underrated') { badgeColor = "var(--neon-p1)"; fateTxt = "UNDERRATED"; }
+            if (fate === 'perfect') { badgeColor = "var(--correct)"; fateTxt = "PERFECT"; }
+
             grid.innerHTML += `
                <div class="game-card" style="width:140px; height:200px; flex-direction:column; border: 2px solid ${badgeColor}; cursor:default;">
                    <img src="${game.background_image || ''}" style="width:100%; height:80px; object-fit:cover; border-radius:5px 5px 0 0;">
@@ -1941,13 +1962,13 @@ function showOUPSummary() {
     mainBtn.className = 'glow-btn pink';
     mainBtn.innerText = 'MAIN MENU';
     mainBtn.onclick = () => {
-        if(window.SFX) SFX.click();
+        if (window.SFX) SFX.click();
         resetGameToMenu();
         // Custom reset for OUP phase UI
         document.getElementById('oup-active-card').style.display = 'flex';
         document.getElementById('oup-controls').style.display = 'flex';
         const sumDiv = document.getElementById('oup-summary-div');
-        if(sumDiv) sumDiv.style.display = 'none';
+        if (sumDiv) sumDiv.style.display = 'none';
     };
     endRow.appendChild(mainBtn);
     summaryDiv.appendChild(endRow);
@@ -1955,16 +1976,16 @@ function showOUPSummary() {
 
 // --- PRICE PARADOX (Buy, Wait for Sale, Skip) LOGIC ---
 let ppState_ui = {
-    turnIndex: 0, 
+    turnIndex: 0,
     p1Judgments: [],
     p2Judgments: []
 };
 
 // GLOBAL PARADOX (Variant 2: Random 10) STATE
-let ppGlobalMode = false; 
+let ppGlobalMode = false;
 let ppRandomIndex = 0;
 let ppRandomGames = [];
-let ppDecisions = { p1: null, p2: null }; 
+let ppDecisions = { p1: null, p2: null };
 
 function startPriceParadoxPhase() {
     console.log("Starting Price Paradox Phase (Tactical)...");
@@ -1986,10 +2007,10 @@ function startPPRandomPhase() {
     ppGlobalMode = true;
     ppRandomIndex = 0;
     ppDecisions = { p1: null, p2: null };
-    
+
     // Clear any leftover summary elements to avoid UI stacking
     const sumDiv = document.getElementById("pp-summary-div");
-    if(sumDiv) sumDiv.style.display = "none";
+    if (sumDiv) sumDiv.style.display = "none";
     document.getElementById("pp-active-card").style.display = "flex";
     document.getElementById("pp-controls").style.display = "flex";
 
@@ -1997,9 +2018,9 @@ function startPPRandomPhase() {
     if (!myRoomData.isOnline || amILeader) {
         ppRandomGames = shuffleArray([...masterGameLibrary]).slice(0, 10);
         if (myRoomData.isOnline) {
-            socket.emit('hl-start-game', {
+            socket.emit('hl-init-games', { // FIX: Changed from hl-start-game
                 roomId: myRoomData.roomId,
-                isPP: true, // Reuse the start event to sync the 10 games
+                isPP: true,
                 games: ppRandomGames
             });
         }
@@ -2008,7 +2029,7 @@ function startPPRandomPhase() {
     document.getElementById("draft-phase").style.display = "none";
     const ppPhase = document.getElementById("pp-phase");
     if (ppPhase) ppPhase.style.display = "flex";
-    
+
     // GUEST GUARD: In online mode, the Guest only proceed if games are synced
     if (myRoomData.isOnline && !amILeader && (!ppRandomGames || ppRandomGames.length === 0)) {
         console.log("Guest is waiting for Global Paradox games to sync...");
@@ -2027,14 +2048,14 @@ function renderPPBoard() {
 }
 
 function renderPPBoardTactical() {
-    if (ppState_ui.turnIndex >= 6) { 
+    if (ppState_ui.turnIndex >= 6) {
         showPPSummary();
         return;
     }
 
     const isP1Turn = (ppState_ui.turnIndex % 2 === 0);
     const activeJudgeRole = isP1Turn ? "p1" : "p2";
-    
+
     const internalListIndex = Math.floor(ppState_ui.turnIndex / 2);
     const listToJudge = isP1Turn ? gameState.player2.draftedForP1 : gameState.player1.draftedForP2;
     const activeGameId = listToJudge[internalListIndex];
@@ -2069,8 +2090,8 @@ function renderPPBoardTactical() {
 
     document.getElementById("pp-active-img").src = game.background_image || "";
     document.getElementById("pp-active-name").innerText = game.name;
-    document.getElementById("pp-stamp-container").style.display = "none"; 
-    
+    document.getElementById("pp-stamp-container").style.display = "none";
+
     const activeCard = document.getElementById("pp-active-card");
     activeCard.style.border = `2px solid ${isP1Turn ? "var(--neon-p1)" : "var(--neon-p2)"}`;
     activeCard.style.boxShadow = `0 0 15px ${isP1Turn ? "var(--neon-p1)" : "var(--neon-p2)"}`;
@@ -2087,7 +2108,7 @@ function renderPPBoardGlobal() {
     const game = ppRandomGames[ppRandomIndex];
     const titleEl = document.getElementById("pp-title");
     const subtEl = document.getElementById("pp-subtitle");
-    
+
     titleEl.innerText = `GLOBAL PARADOX: ${ppRandomIndex + 1}/10`;
     subtEl.innerText = "Hidden until both decide...";
     titleEl.style.color = "var(--text-main)";
@@ -2136,12 +2157,12 @@ function setupPPControls(isEnabled) {
     [btnB, btnS, btnK].forEach(btn => {
         if (!btn) return;
         btn.style.opacity = isEnabled ? '1' : '0.5';
-        btn.style.cursor  = isEnabled ? 'pointer' : 'not-allowed';
-        btn.disabled      = !isEnabled;
+        btn.style.cursor = isEnabled ? 'pointer' : 'not-allowed';
+        btn.disabled = !isEnabled;
     });
 
     if (isEnabled && btnB && btnS && btnK) {
-        btnB.addEventListener('click', () => assignPPFate('buy'),  { signal });
+        btnB.addEventListener('click', () => assignPPFate('buy'), { signal });
         btnS.addEventListener('click', () => assignPPFate('sale'), { signal });
         btnK.addEventListener('click', () => assignPPFate('skip'), { signal });
     }
@@ -2149,28 +2170,26 @@ function setupPPControls(isEnabled) {
 
 function assignPPFate(fate) {
     if (window.SFX) SFX.click();
-    
-    if (myRoomData.isOnline) {
-        if (socket) {
-            socket.emit("hl-guess-sync", {
-                roomId: myRoomData.roomId,
-                isPP: true,
-                actor: myIdentity,
-                decision: fate,
-                index: ppGlobalMode ? ppRandomIndex : ppState_ui.turnIndex,
-                isGlobal: ppGlobalMode
-            });
-        }
-    } else {
-        // Local mode
-        const data = { 
-            actor: ppGlobalMode ? (ppDecisions.p1 === null ? 'p1' : 'p2') : (ppState_ui.turnIndex % 2 === 0 ? 'p1' : 'p2'), 
-            decision: fate, 
-            index: ppGlobalMode ? ppRandomIndex : ppState_ui.turnIndex,
-            isGlobal: ppGlobalMode
-        };
-        handlePPDecisionSync(data);
+
+    // FIX: Disable buttons immediately to prevent double-clicks
+    setupPPControls(false);
+
+    const data = {
+        actor: myRoomData.isOnline ? myIdentity : (ppGlobalMode ? (ppDecisions.p1 === null ? 'p1' : 'p2') : (ppState_ui.turnIndex % 2 === 0 ? 'p1' : 'p2')),
+        decision: fate,
+        index: ppGlobalMode ? ppRandomIndex : ppState_ui.turnIndex,
+        isGlobal: ppGlobalMode
+    };
+
+    if (myRoomData.isOnline && socket) {
+        socket.emit("hl-guess-sync", {
+            roomId: myRoomData.roomId,
+            isPP: true,
+            ...data
+        });
     }
+    // FIX: Apply locally
+    handlePPDecisionSync(data);
 }
 
 function handlePPDecisionSync(data) {
@@ -2187,11 +2206,11 @@ function handlePPTacticalSync(data) {
     const stampContainer = document.getElementById("pp-stamp-container");
     stampContainer.style.display = "flex";
     const stamp = document.getElementById("pp-stamp");
-    
+
     applyPPStampStyle(stamp, data.decision);
-    
+
     stamp.style.animation = "none";
-    void stamp.offsetWidth; 
+    void stamp.offsetWidth;
     stamp.style.animation = "pop-in 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards";
 
     if (data.index % 2 === 0) ppState_ui.p1Judgments.push(data.decision);
@@ -2230,14 +2249,14 @@ function revealPPGlobalDecisions() {
         div.style.borderRadius = "8px";
         div.style.textTransform = "uppercase";
         div.style.border = "3px solid";
-        
+
         const pName = getPlayerName(role);
         let color = "#fff";
         let text = "";
-        if(decision === 'buy') { color = "#00ff64"; text = "BUY"; }
-        if(decision === 'sale') { color = "#ffd700"; text = "SALE"; }
-        if(decision === 'skip') { color = "#ff0050"; text = "SKIP"; }
-        
+        if (decision === 'buy') { color = "#00ff64"; text = "BUY"; }
+        if (decision === 'sale') { color = "#ffd700"; text = "SALE"; }
+        if (decision === 'skip') { color = "#ff0050"; text = "SKIP"; }
+
         div.style.borderColor = color;
         div.style.color = color;
         div.innerHTML = `<span style="color:#fff; font-size:12px; display:block;">${pName}</span> ${text}`;
@@ -2257,15 +2276,15 @@ function revealPPGlobalDecisions() {
     // Show countdown for NEXT game
     let nextCount = 4;
     const subt = document.getElementById("pp-subtitle");
-    if(subt) {
+    if (subt) {
         subt.style.color = "var(--text-dim)";
         subt.innerText = `NEXT GAME IN ${nextCount}...`;
     }
 
     const nextTimer = setInterval(() => {
         nextCount--;
-        if(nextCount > 0) {
-            if(subt) subt.innerText = `NEXT GAME IN ${nextCount}...`;
+        if (nextCount > 0) {
+            if (subt) subt.innerText = `NEXT GAME IN ${nextCount}...`;
         } else {
             clearInterval(nextTimer);
             ppRandomIndex++;
@@ -2304,9 +2323,9 @@ function showPPSummary() {
     document.getElementById("pp-controls").style.display = "none";
 
     const container = document.querySelector("#pp-phase .centered-grid");
-    
+
     let summaryDiv = document.getElementById("pp-summary-div");
-    if(!summaryDiv) {
+    if (!summaryDiv) {
         summaryDiv = document.createElement("div");
         summaryDiv.id = "pp-summary-div";
         summaryDiv.style.width = "100%";
@@ -2332,17 +2351,17 @@ function showPPSummary() {
     const drawGrid = (judgments, list, gridId) => {
         const grid = document.getElementById(gridId);
         if (!list || list.length === 0) return;
-        
+
         list.forEach((gameIdOrObj, i) => {
             const game = (typeof gameIdOrObj === 'object') ? gameIdOrObj : masterGameLibrary.find(g => Number(g.id) === Number(gameIdOrObj));
-            if(!game) return;
+            if (!game) return;
             const decision = judgments[i];
             let badgeColor = "var(--text-dim)";
             let decisionTxt = "---";
-            if(decision === 'buy') { badgeColor = "#00ff64"; decisionTxt = "BUY IT"; }
-            if(decision === 'sale') { badgeColor = "#ffd700"; decisionTxt = "WAIT FOR SALE"; }
-            if(decision === 'skip') { badgeColor = "#ff0050"; decisionTxt = "SKIP IT"; }
-            
+            if (decision === 'buy') { badgeColor = "#00ff64"; decisionTxt = "BUY IT"; }
+            if (decision === 'sale') { badgeColor = "#ffd700"; decisionTxt = "WAIT FOR SALE"; }
+            if (decision === 'skip') { badgeColor = "#ff0050"; decisionTxt = "SKIP IT"; }
+
             grid.innerHTML += `
                <div class="game-card" style="width:140px; height:200px; flex-direction:column; border: 2px solid ${badgeColor}; cursor:default;">
                    <img src="${game.background_image || ""}" style="width:100%; height:80px; object-fit:cover; border-radius:5px 5px 0 0;">
@@ -2371,12 +2390,12 @@ function showPPSummary() {
     mainBtn.className = "glow-btn pink";
     mainBtn.innerText = "MAIN MENU";
     mainBtn.onclick = () => {
-        if(window.SFX) SFX.click();
+        if (window.SFX) SFX.click();
         resetGameToMenu();
         document.getElementById("pp-active-card").style.display = "flex";
         document.getElementById("pp-controls").style.display = "flex";
         const sd = document.getElementById("pp-summary-div");
-        if(sd) sd.style.display = "none";
+        if (sd) sd.style.display = "none";
     };
     endRow.appendChild(mainBtn);
     summaryDiv.appendChild(endRow);
