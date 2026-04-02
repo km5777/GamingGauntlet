@@ -163,6 +163,10 @@ function finalizeGameStart() {
         document.getElementById('draft-phase').style.display = 'none';
         startPPRandomPhase();
         return;
+    } else if (gameState.phase === "steam_review") {
+        document.getElementById('draft-phase').style.display = 'none';
+        startSteamReviewPhase();
+        return;
     } else {
         // Drafting Mode (Keep/Kill)
         document.getElementById('draft-phase').style.display = 'block';

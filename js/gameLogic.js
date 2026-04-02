@@ -29,6 +29,17 @@ let ppState = {
     roundIndex: 0
 };
 
+let srState = {
+    round: 0,
+    p1Score: 0,
+    p2Score: 0,
+    currentReview: "",
+    options: [],
+    correctId: null,
+    p1Guess: null,
+    p2Guess: null
+};
+
 let draftLimit = 10;
 let currentSelections = [];
 

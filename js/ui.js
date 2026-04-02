@@ -470,6 +470,13 @@ function resetGameToMenu() {
     const ppPhase = document.getElementById('pp-phase');
     if (ppPhase) ppPhase.style.display = 'none';
 
+    const srPhase = document.getElementById('sr-phase');
+    if (srPhase) {
+        srPhase.style.display = 'none';
+        document.getElementById('sr-review-box').style.display = 'flex';
+        document.getElementById('sr-options-grid').style.display = 'grid';
+    }
+
     // Reset Higher Lower scores
     hlState.p1Score = 0;
     hlState.p2Score = 0;
@@ -2415,3 +2422,230 @@ function showPPSummary() {
     summaryDiv.appendChild(endRow);
 }
 
+const srModeBtn = document.getElementById('mode-steam-review');
+if (srModeBtn) {
+    srModeBtn.onclick = () => {
+        if (window.SFX) SFX.click();
+        gameState.phase = "steam_review";
+        currentVariant = 'random_10'; // Global mode
+        setActiveMode('mode-steam-review');
+        showSelectionStep("step-play-options", "STEAM REVIEWS");
+    };
+}
+
+function startSteamReviewPhase() {
+    document.getElementById('sr-phase').style.display = 'flex';
+    srState.round = 0;
+    srState.p1Score = 0;
+    srState.p2Score = 0;
+
+    document.getElementById('sr-p1-label').innerHTML = `${getPlayerName('p1')}: <span id="sr-p1-score">0</span>`;
+    document.getElementById('sr-p2-label').innerHTML = `${getPlayerName('p2')}: <span id="sr-p2-score">0</span>`;
+
+    if (!myRoomData.isOnline || amILeader) {
+        generateSRRound();
+    }
+}
+
+async function fetchSteamReviewForGame(game) {
+    try {
+        // 1. Get Steam App ID from RAWG
+        const rawgRes = await fetch(`https://api.rawg.io/api/games/${game.id}?key=${API_KEY}`);
+        const rawgData = await rawgRes.json();
+        const steamStore = rawgData.stores?.find(s => s.store.slug === 'steam');
+        if (!steamStore) return null;
+
+        const appIdMatch = steamStore.url.match(/\/app\/(\d+)/);
+        if (!appIdMatch) return null;
+        const appId = appIdMatch[1];
+
+        // 2. Fetch Reviews via AllOrigins Proxy
+        const steamUrl = `https://store.steampowered.com/appreviews/${appId}?json=1&language=english&filter=summary&num_per_page=20`;
+        const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(steamUrl)}`;
+
+        const reviewRes = await fetch(proxyUrl);
+        const steamData = await reviewRes.json();
+
+        if (!steamData.reviews || steamData.reviews.length === 0) return null;
+
+        // Filter out extremely short reviews
+        const validReviews = steamData.reviews.filter(r => r.review.length > 20);
+        if (validReviews.length === 0) return null;
+
+        const randomReview = validReviews[Math.floor(Math.random() * validReviews.length)].review;
+
+        // Censor game name
+        const censoredReview = randomReview.replace(new RegExp(game.name, 'gi'), '█████');
+        return `"${censoredReview}"`;
+    } catch (e) {
+        return null;
+    }
+}
+
+async function generateSRRound() {
+    document.getElementById('sr-review-box').innerText = "Hacking into Steam mainframe... Fetching review...";
+    document.getElementById('sr-options-grid').innerHTML = "";
+
+    let review = null;
+    let correctGame = null;
+    let attempts = 0;
+
+    // Keep trying until we find a game with a review (max 10 tries to prevent infinite loops)
+    while (!review && attempts < 10) {
+        correctGame = masterGameLibrary[Math.floor(Math.random() * masterGameLibrary.length)];
+        review = await fetchSteamReviewForGame(correctGame);
+        attempts++;
+    }
+
+    if (!review) review = '"10/10 would play again." (API Fallback - Could not find review)';
+
+    // Get 3 wrong options
+    let options = [correctGame];
+    while (options.length < 4) {
+        let wrongGame = masterGameLibrary[Math.floor(Math.random() * masterGameLibrary.length)];
+        if (!options.find(g => g.id === wrongGame.id)) {
+            options.push(wrongGame);
+        }
+    }
+
+    options = shuffleArray(options);
+
+    const payload = {
+        review: review,
+        options: options,
+        correctId: correctGame.id,
+        round: srState.round + 1
+    };
+
+    if (myRoomData.isOnline && socket) {
+        socket.emit('sr-sync-round', payload);
+    }
+    handleSRRoundSync(payload);
+}
+
+function handleSRRoundSync(data) {
+    srState.round = data.round;
+    srState.currentReview = data.review;
+    srState.options = data.options;
+    srState.correctId = data.correctId;
+    srState.p1Guess = null;
+    srState.p2Guess = null;
+
+    document.getElementById('sr-round-num').innerText = srState.round;
+    document.getElementById('sr-review-box').innerText = srState.currentReview;
+
+    const grid = document.getElementById('sr-options-grid');
+    grid.innerHTML = "";
+
+    srState.options.forEach(game => {
+        const btn = document.createElement('button');
+        btn.className = 'sr-option-btn';
+        btn.dataset.id = game.id;
+        btn.innerHTML = `<img src="${game.background_image || ''}"> <span>${game.name}</span>`;
+
+        btn.onclick = () => assignSRGuess(game.id);
+        grid.appendChild(btn);
+    });
+}
+
+function assignSRGuess(guessId) {
+    if (window.SFX) SFX.click();
+
+    let actor = myRoomData.isOnline ? myIdentity : (srState.p1Guess === null ? 'p1' : 'p2');
+
+    if (myRoomData.isOnline && socket) {
+        socket.emit('hl-guess-sync', {
+            roomId: myRoomData.roomId,
+            isSR: true,
+            actor: actor,
+            guessId: guessId
+        });
+    }
+
+    handleSRGuessSync({ actor, guessId });
+}
+
+function handleSRGuessSync(data) {
+    if (data.actor === 'p1') srState.p1Guess = data.guessId;
+    if (data.actor === 'p2') srState.p2Guess = data.guessId;
+
+    if (myRoomData.isOnline) {
+        if (data.actor === myIdentity) {
+            document.querySelectorAll('.sr-option-btn').forEach(b => {
+                b.style.pointerEvents = 'none';
+                b.style.opacity = '0.5';
+            });
+            document.getElementById('sr-review-box').innerText = srState.currentReview + "\n\n[Waiting for opponent...]";
+        }
+    } else {
+        if (srState.p1Guess !== null && srState.p2Guess === null) {
+            document.getElementById('sr-review-box').innerText = srState.currentReview + `\n\n[${getPlayerName('p1')} locked in. ${getPlayerName('p2')}'s turn!]`;
+        }
+    }
+
+    if (srState.p1Guess !== null && srState.p2Guess !== null) {
+        resolveSRRound();
+    }
+}
+
+function resolveSRRound() {
+    document.getElementById('sr-review-box').innerText = srState.currentReview; // Clear waiting text
+
+    const correctId = srState.correctId;
+    let p1Correct = srState.p1Guess === correctId;
+    let p2Correct = srState.p2Guess === correctId;
+
+    if (p1Correct) srState.p1Score += 100;
+    if (p2Correct) srState.p2Score += 100;
+
+    document.getElementById('sr-p1-score').innerText = srState.p1Score;
+    document.getElementById('sr-p2-score').innerText = srState.p2Score;
+
+    document.querySelectorAll('.sr-option-btn').forEach(b => {
+        const btnId = Number(b.dataset.id);
+        b.style.pointerEvents = 'none';
+
+        if (btnId === correctId) {
+            b.style.background = 'var(--correct, #00ff64)';
+            b.style.borderColor = 'var(--correct, #00ff64)';
+            b.style.color = 'black';
+        } else {
+            b.style.opacity = '0.3';
+        }
+    });
+
+    if (window.SFX) {
+        if ((myIdentity === 'p1' && p1Correct) || (myIdentity === 'p2' && p2Correct) || (!myRoomData.isOnline && (p1Correct || p2Correct))) {
+            SFX.correct();
+        } else {
+            SFX.incorrect();
+        }
+    }
+
+    setTimeout(() => {
+        if (srState.round >= 10) {
+            showSRSummary();
+        } else {
+            if (!myRoomData.isOnline || amILeader) {
+                generateSRRound();
+            }
+        }
+    }, 4000);
+}
+
+function showSRSummary() {
+    document.getElementById('sr-title').innerText = "FINAL SCORES";
+    document.getElementById('sr-review-box').style.display = 'none';
+
+    const grid = document.getElementById('sr-options-grid');
+    grid.style.display = 'flex';
+    grid.style.flexDirection = 'column';
+    grid.style.alignItems = 'center';
+
+    const winner = srState.p1Score > srState.p2Score ? getPlayerName('p1') : (srState.p2Score > srState.p1Score ? getPlayerName('p2') : "TIE");
+
+    grid.innerHTML = `
+        <h2 style="color: var(--accent); font-size: 40px; margin-bottom: 20px;">${winner} WINS!</h2>
+        <button class="glow-btn pink" onclick="resetGameToMenu()">MAIN MENU</button>
+    `;
+}

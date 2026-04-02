@@ -385,6 +385,10 @@ function registerMultiplayerEvents() {
 
     // ── Higher/Lower sync ──
     socket.on('hl-init-games', (data) => {
+        if (data.isSR) {
+            if (typeof handleSRGuessSync === 'function') handleSRGuessSync(data);
+            return;
+        }
         if (data.isPP) {
             ppRandomGames = data.games;
             if (!amILeader) {
@@ -397,6 +401,10 @@ function registerMultiplayerEvents() {
         hlState.nextGame = data.next;
         gameState.turn = data.turn || 'p1';
         setupHLRound();
+    });
+
+    socket.on('sr-sync-round', (data) => {
+        if (!amILeader && typeof handleSRRoundSync === 'function') handleSRRoundSync(data);
     });
 
     socket.on('hl-next-game-sync', (data) => {

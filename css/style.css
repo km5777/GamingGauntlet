@@ -137,9 +137,23 @@ body {
 }
 
 @keyframes pop-in {
-    0% { transform: scale(0.85); opacity: 0; filter: blur(4px); }
-    50% { transform: scale(1.02); opacity: 1; filter: blur(0px); }
-    100% { transform: scale(1); opacity: 1; filter: blur(0px); }
+    0% {
+        transform: scale(0.85);
+        opacity: 0;
+        filter: blur(4px);
+    }
+
+    50% {
+        transform: scale(1.02);
+        opacity: 1;
+        filter: blur(0px);
+    }
+
+    100% {
+        transform: scale(1);
+        opacity: 1;
+        filter: blur(0px);
+    }
 }
 
 .animate-pop-in {
@@ -147,8 +161,17 @@ body {
 }
 
 @keyframes pop-out {
-    0% { transform: scale(1); opacity: 1; filter: blur(0px); }
-    100% { transform: scale(0.9); opacity: 0; filter: blur(4px); }
+    0% {
+        transform: scale(1);
+        opacity: 1;
+        filter: blur(0px);
+    }
+
+    100% {
+        transform: scale(0.9);
+        opacity: 0;
+        filter: blur(4px);
+    }
 }
 
 .animate-pop-out {
@@ -852,7 +875,7 @@ input[type="text"]:focus {
     left: -100%;
     width: 100%;
     height: 100%;
-    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.05), transparent);
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.05), transparent);
     transition: 0.5s;
 }
 
@@ -1297,7 +1320,7 @@ input[type="text"]:focus {
 }
 
 .br-slot-num {
-    background: rgba(0,0,0,0.5);
+    background: rgba(0, 0, 0, 0.5);
     width: 40px;
     height: 100%;
     display: flex;
@@ -1322,14 +1345,44 @@ input[type="text"]:focus {
 
 /* --- CATEGORY CLASH --- */
 .cc-hidden-card {
-    background: repeating-linear-gradient(
-        45deg,
-        #11131a,
-        #11131a 10px,
-        #151821 10px,
-        #151821 20px
-    );
+    background: repeating-linear-gradient(45deg,
+            #11131a,
+            #11131a 10px,
+            #151821 10px,
+            #151821 20px);
     border: 2px dashed rgba(255, 255, 255, 0.1) !important;
     box-shadow: none !important;
     opacity: 0.8;
+}
+
+.sr-option-btn {
+    background: var(--surface-light);
+    border: 2px solid var(--border-subtle);
+    border-radius: 12px;
+    padding: 15px;
+    color: white;
+    font-family: var(--font-ui);
+    font-size: 16px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    text-align: left;
+    box-shadow: var(--shadow-soft);
+}
+
+.sr-option-btn:hover {
+    border-color: var(--accent);
+    transform: translateY(-3px);
+    box-shadow: 0 10px 20px var(--accent-glow);
+}
+
+.sr-option-btn img {
+    width: 60px;
+    height: 60px;
+    object-fit: cover;
+    border-radius: 8px;
+    flex-shrink: 0;
 }
