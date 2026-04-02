@@ -2449,7 +2449,6 @@ function startSteamReviewPhase() {
 
 async function fetchSteamReviewForGame(game) {
     try {
-        // 1. Get Steam App ID from RAWG
         const rawgRes = await fetch(`https://api.rawg.io/api/games/${game.id}?key=${API_KEY}`);
         const rawgData = await rawgRes.json();
         const steamStore = rawgData.stores?.find(s => s.store.slug === 'steam');
@@ -2459,26 +2458,23 @@ async function fetchSteamReviewForGame(game) {
         if (!appIdMatch) return null;
         const appId = appIdMatch[1];
 
-        // 2. Fetch Reviews via AllOrigins Proxy
-        const steamUrl = `https://store.steampowered.com/appreviews/${appId}?json=1&language=english&num_per_page=50&day_range=365`;
-        const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(steamUrl)}`;
+        // Using a more reliable CORS proxy
+        const steamUrl = `https://store.steampowered.com/appreviews/${appId}?json=1&language=english&num_per_page=20`;
+        const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(steamUrl)}`;
 
-        const reviewRes = await fetch(proxyUrl);
-        const data = await reviewRes.json();
-        const steamData = JSON.parse(data.contents); // AllOrigins /get returns JSON with a 'contents' string
+        const response = await fetch(proxyUrl);
+        const data = await response.json();
 
-        if (!steamData.reviews || steamData.reviews.length === 0) return null;
+        if (!data.reviews || data.reviews.length === 0) return null;
 
-        // Filter out short ones and ones that are just ASCII art
-        const validReviews = steamData.reviews.filter(r => r.review.length > 30 && r.review.length < 300);
-        if (validReviews.length === 0) return null;
+        // Pick a review that is between 30 and 200 chars
+        const candidates = data.reviews.filter(r => r.review.length > 30 && r.review.length < 200);
+        if (candidates.length === 0) return null;
 
-        const randomReview = validReviews[Math.floor(Math.random() * validReviews.length)].review;
-
-        // Censor game name
-        const censoredReview = randomReview.replace(new RegExp(game.name, 'gi'), '█████');
-        return `"${censoredReview}"`;
+        const randomReview = candidates[Math.floor(Math.random() * candidates.length)].review;
+        return `"${randomReview.replace(new RegExp(game.name, 'gi'), '█████')}"`;
     } catch (e) {
+        console.error("Steam API Error:", e);
         return null;
     }
 }
@@ -2495,6 +2491,7 @@ async function generateSRRound() {
     while (!review && attempts < 10) {
         correctGame = masterGameLibrary[Math.floor(Math.random() * masterGameLibrary.length)];
         review = await fetchSteamReviewForGame(correctGame);
+        if (!review) console.log("Failed to get review for:", correctGame.name); // ADD THIS
         attempts++;
     }
 
