@@ -1478,7 +1478,7 @@ function updateCCPlayerControls() {
                 : gameState.player2.draftedForP1;
             const gameId = draftList[ccState.revealIndex];
 
-            if (myRoomData.isOnline) {
+            if (myRoomData.isOnline && socket) {
                 socket.emit('hl-guess-sync', {
                     roomId: myRoomData.roomId,
                     isCCReveal: true,
@@ -1486,17 +1486,18 @@ function updateCCPlayerControls() {
                     index: ccState.revealIndex,
                     gameId
                 });
-            }
-            // FIX: Always run the local visual update regardless of online/offline
-            const game = masterGameLibrary.find(g => Number(g.id) === Number(gameId));
-            ccRevealGameVisual(ccState.revealTurn, ccState.revealIndex, game);
-            if (ccState.revealTurn === 'p1') {
-                ccState.revealTurn = 'p2';
             } else {
-                ccState.revealTurn = 'p1';
-                ccState.revealIndex--;
+                // Local Offline Mode Only
+                const game = masterGameLibrary.find(g => Number(g.id) === Number(gameId));
+                ccRevealGameVisual(ccState.revealTurn, ccState.revealIndex, game);
+                if (ccState.revealTurn === 'p1') {
+                    ccState.revealTurn = 'p2';
+                } else {
+                    ccState.revealTurn = 'p1';
+                    ccState.revealIndex--;
+                }
+                updateCCPlayerControls();
             }
-            updateCCPlayerControls();
         };
     } else {
         indicator.innerText = `WAITING FOR ${actorName.toUpperCase()}...`;

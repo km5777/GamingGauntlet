@@ -424,8 +424,10 @@ function registerMultiplayerEvents() {
     socket.on('hl-sync-reveal', (data) => {
         // CC Reveal
         if (data.isCCReveal) {
-            const game = masterGameLibrary.find(g => Number(g.id) === Number(data.gameId));
-            if (!game) return;
+            const actualId = typeof data.gameId === 'object' && data.gameId !== null ? data.gameId.id : data.gameId;
+            let game = masterGameLibrary.find(g => Number(g.id) === Number(actualId));
+            if (!game) game = { id: actualId, name: "Unknown Game", background_image: "" }; // Fallback to prevent crash
+
             if (typeof ccRevealGameVisual === 'function') ccRevealGameVisual(data.role, data.index, game);
             if (data.role === 'p1') ccState.revealTurn = 'p2';
             else { ccState.revealTurn = 'p1'; ccState.revealIndex--; }
