@@ -114,12 +114,24 @@ function handleConfirm() {
             roomId: myRoomData.roomId,
             role: myIdentity,
             draftList: currentSelections.map(id => {
-                let actualId = typeof id === 'object' && id !== null ? id.id : id;
-                let g = masterGameLibrary.find(x => Number(x.id) === Number(actualId));
-                // FIX: Send the FULL object so the other player can add it to their library
-                if (g) return g;
-                if (typeof id === 'object' && id !== null) return id;
-                return { id: Number(actualId), name: "Unknown Game", background_image: "" };
+                // Force strict number conversion immediately
+                let actualId = Number(typeof id === 'object' && id !== null ? id.id : id);
+
+                // Find the game using strict number matching
+                let g = masterGameLibrary.find(x => Number(x.id) === actualId);
+
+                if (g) {
+                    // Ensure the ID is a number before sending
+                    g.id = Number(g.id);
+                    return g;
+                }
+
+                if (typeof id === 'object' && id !== null) {
+                    id.id = Number(id.id);
+                    return id;
+                }
+
+                return { id: actualId, name: "Unknown Game", background_image: "" };
             })
         });
     } else {

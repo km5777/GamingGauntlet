@@ -522,15 +522,19 @@ function registerMultiplayerEvents() {
         try {
             if (data.p1Draft) {
                 data.p1Draft.forEach(g => {
-                    if (!masterGameLibrary.find(m => Number(m.id) === Number(g.id))) masterGameLibrary.push(g);
+                    g.id = Number(g.id); // Force number
+                    if (!masterGameLibrary.find(m => Number(m.id) === g.id)) masterGameLibrary.push(g);
                 });
-                gameState.player1.draftedForP2 = data.p1Draft.map(g => Number(g.id));
+                // Filter out any accidental NaNs that might corrupt the array
+                gameState.player1.draftedForP2 = data.p1Draft.map(g => Number(g.id)).filter(id => !isNaN(id));
             }
             if (data.p2Draft) {
                 data.p2Draft.forEach(g => {
-                    if (!masterGameLibrary.find(m => Number(m.id) === Number(g.id))) masterGameLibrary.push(g);
+                    g.id = Number(g.id); // Force number
+                    if (!masterGameLibrary.find(m => Number(m.id) === g.id)) masterGameLibrary.push(g);
                 });
-                gameState.player2.draftedForP1 = data.p2Draft.map(g => Number(g.id));
+                // Filter out any accidental NaNs that might corrupt the array
+                gameState.player2.draftedForP1 = data.p2Draft.map(g => Number(g.id)).filter(id => !isNaN(id));
             }
         } catch (e) { console.error('Payload sync error:', e); }
 

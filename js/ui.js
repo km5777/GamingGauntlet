@@ -181,8 +181,9 @@ function showRevealPicker() {
         let list = (attackerRole === 'p1') ? gameState.player1.draftedForP2 : gameState.player2.draftedForP1;
 
         list.forEach((gameId) => {
-            const actualId = typeof gameId === 'object' && gameId !== null ? gameId.id : gameId;
-            let game = masterGameLibrary.find(g => Number(g.id) === Number(actualId));
+            const actualId = Number(typeof gameId === 'object' && gameId !== null ? gameId.id : gameId);
+            let game = masterGameLibrary.find(g => Number(g.id) === actualId);
+
             if (!game) {
                 game = { id: actualId, name: "Unknown Game", background_image: "" };
             }
@@ -225,8 +226,9 @@ function showRevealPicker() {
             if (!list || list.length === 0) return;
 
             const idx = Math.floor(Math.random() * list.length);
-            const actualId = typeof list[idx] === 'object' && list[idx] !== null ? list[idx].id : list[idx];
-            let game = masterGameLibrary.find(g => Number(g.id) === Number(actualId));
+            const actualId = Number(typeof list[idx] === 'object' && list[idx] !== null ? list[idx].id : list[idx]);
+            let game = masterGameLibrary.find(g => Number(g.id) === actualId);
+
             if (!game) {
                 game = { id: actualId, name: "Unknown Game", background_image: "" };
             }
