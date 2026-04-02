@@ -1465,11 +1465,6 @@ function updateCCPlayerControls() {
         btn.style.display = 'block';
 
         btn.onclick = () => {
-            // BUG FIX: isCCRevealing prevents a rapid double-click or a
-            // lag-spike retransmission from firing the reveal twice, which
-            // would cause the button to permanently vanish on the wrong player.
-            if (isCCRevealing) return;
-            isCCRevealing = true;
             btn.disabled = true;
             btn.style.opacity = '0.5';
 
@@ -1478,26 +1473,22 @@ function updateCCPlayerControls() {
                 : gameState.player2.draftedForP1;
             const gameId = draftList[ccState.revealIndex];
 
+            const data = {
+                isCCReveal: true,
+                role: ccState.revealTurn,
+                index: ccState.revealIndex,
+                gameId: gameId
+            };
+
             if (myRoomData.isOnline && socket) {
                 socket.emit('hl-guess-sync', {
                     roomId: myRoomData.roomId,
-                    isCCReveal: true,
-                    role: ccState.revealTurn,
-                    index: ccState.revealIndex,
-                    gameId
+                    ...data
                 });
-            } else {
-                // Local Offline Mode Only
-                const game = masterGameLibrary.find(g => Number(g.id) === Number(gameId));
-                ccRevealGameVisual(ccState.revealTurn, ccState.revealIndex, game);
-                if (ccState.revealTurn === 'p1') {
-                    ccState.revealTurn = 'p2';
-                } else {
-                    ccState.revealTurn = 'p1';
-                    ccState.revealIndex--;
-                }
-                updateCCPlayerControls();
             }
+
+            // FIX: Always apply locally using the synchronized handler
+            handleCCRevealSync(data);
         };
     } else {
         indicator.innerText = `WAITING FOR ${actorName.toUpperCase()}...`;
@@ -1518,6 +1509,26 @@ function ccRevealGameVisual(role, idx, game) {
         `;
         slotEl.style.border = role === 'p1' ? '2px solid var(--neon-p1)' : '2px solid var(--neon-p2)';
     }
+}
+
+function handleCCRevealSync(data) {
+    // FIX: Strict guard prevents double-execution if the server echoes the event back
+    if (ccState.revealTurn !== data.role || ccState.revealIndex !== data.index) return;
+
+    const actualId = typeof data.gameId === 'object' && data.gameId !== null ? data.gameId.id : data.gameId;
+    let game = masterGameLibrary.find(g => Number(g.id) === Number(actualId));
+    if (!game) game = { id: actualId, name: "Unknown Game", background_image: "" };
+
+    if (typeof ccRevealGameVisual === 'function') ccRevealGameVisual(data.role, data.index, game);
+
+    if (data.role === 'p1') {
+        ccState.revealTurn = 'p2';
+    } else {
+        ccState.revealTurn = 'p1';
+        ccState.revealIndex--;
+    }
+
+    if (typeof updateCCPlayerControls === 'function') updateCCPlayerControls();
 }
 
 // --- KEEP CUT UPGRADE (KCU) LOGIC ---
