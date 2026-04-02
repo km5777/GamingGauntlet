@@ -502,7 +502,7 @@ document.getElementById('open-online-btn').onclick = () => {
 function setActiveMode(activeId) {
     const modes = [
         'mode-keep-kill', 'mode-higher-lower', 'mode-blind-ranking',
-        'mode-category-clash', 'mode-keep-cut-upgrade', 'mode-oup', 'mode-price-paradox'
+        'mode-category-clash', 'mode-keep-cut-upgrade', 'mode-oup', 'mode-price-paradox', 'mode-steam-review'
     ];
     modes.forEach(id => {
         const el = document.getElementById(id);
