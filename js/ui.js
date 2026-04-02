@@ -2449,6 +2449,7 @@ function startSteamReviewPhase() {
 
 async function fetchSteamReviewForGame(game) {
     try {
+        // 1. Get Steam App ID from RAWG
         const rawgRes = await fetch(`https://api.rawg.io/api/games/${game.id}?key=${API_KEY}`);
         const rawgData = await rawgRes.json();
         const steamStore = rawgData.stores?.find(s => s.store.slug === 'steam');
@@ -2458,23 +2459,33 @@ async function fetchSteamReviewForGame(game) {
         if (!appIdMatch) return null;
         const appId = appIdMatch[1];
 
-        // Using a more reliable CORS proxy
+        // 2. Use 'corsproxy.io' but add a User-Agent header
+        // Steam often blocks requests missing a User-Agent
         const steamUrl = `https://store.steampowered.com/appreviews/${appId}?json=1&language=english&num_per_page=20`;
         const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(steamUrl)}`;
 
-        const response = await fetch(proxyUrl);
+        const response = await fetch(proxyUrl, {
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+            }
+        });
+
+        if (!response.ok) return null;
         const data = await response.json();
 
         if (!data.reviews || data.reviews.length === 0) return null;
 
-        // Pick a review that is between 30 and 200 chars
-        const candidates = data.reviews.filter(r => r.review.length > 30 && r.review.length < 200);
+        // 3. Filter for quality
+        const candidates = data.reviews.filter(r => r.review.length > 40 && r.review.length < 250);
         if (candidates.length === 0) return null;
 
         const randomReview = candidates[Math.floor(Math.random() * candidates.length)].review;
-        return `"${randomReview.replace(new RegExp(game.name, 'gi'), '█████')}"`;
+        // Clean up weird whitespace/newlines
+        const cleanReview = randomReview.replace(/\s+/g, ' ').trim();
+
+        return `"${cleanReview.replace(new RegExp(game.name, 'gi'), '█████')}"`;
     } catch (e) {
-        console.error("Steam API Error:", e);
+        console.warn("Steam Fetch Failed:", e);
         return null;
     }
 }
@@ -2490,8 +2501,11 @@ async function generateSRRound() {
     // Keep trying until we find a game with a review (max 10 tries to prevent infinite loops)
     while (!review && attempts < 10) {
         correctGame = masterGameLibrary[Math.floor(Math.random() * masterGameLibrary.length)];
+
+        // FIX: Add a small delay between API calls to prevent 429 errors
+        await new Promise(resolve => setTimeout(resolve, 800));
+
         review = await fetchSteamReviewForGame(correctGame);
-        if (!review) console.log("Failed to get review for:", correctGame.name); // ADD THIS
         attempts++;
     }
 
