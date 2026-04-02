@@ -2460,16 +2460,17 @@ async function fetchSteamReviewForGame(game) {
         const appId = appIdMatch[1];
 
         // 2. Fetch Reviews via AllOrigins Proxy
-        const steamUrl = `https://store.steampowered.com/appreviews/${appId}?json=1&language=english&filter=summary&num_per_page=20`;
-        const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(steamUrl)}`;
+        const steamUrl = `https://store.steampowered.com/appreviews/${appId}?json=1&language=english&num_per_page=50&day_range=365`;
+        const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(steamUrl)}`;
 
         const reviewRes = await fetch(proxyUrl);
-        const steamData = await reviewRes.json();
+        const data = await reviewRes.json();
+        const steamData = JSON.parse(data.contents); // AllOrigins /get returns JSON with a 'contents' string
 
         if (!steamData.reviews || steamData.reviews.length === 0) return null;
 
-        // Filter out extremely short reviews
-        const validReviews = steamData.reviews.filter(r => r.review.length > 20);
+        // Filter out short ones and ones that are just ASCII art
+        const validReviews = steamData.reviews.filter(r => r.review.length > 30 && r.review.length < 300);
         if (validReviews.length === 0) return null;
 
         const randomReview = validReviews[Math.floor(Math.random() * validReviews.length)].review;
