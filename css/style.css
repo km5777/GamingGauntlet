@@ -1354,35 +1354,3 @@ input[type="text"]:focus {
     box-shadow: none !important;
     opacity: 0.8;
 }
-
-.sr-option-btn {
-    background: var(--surface-light);
-    border: 2px solid var(--border-subtle);
-    border-radius: 12px;
-    padding: 15px;
-    color: white;
-    font-family: var(--font-ui);
-    font-size: 16px;
-    font-weight: bold;
-    cursor: pointer;
-    transition: 0.2s;
-    display: flex;
-    align-items: center;
-    gap: 15px;
-    text-align: left;
-    box-shadow: var(--shadow-soft);
-}
-
-.sr-option-btn:hover {
-    border-color: var(--accent);
-    transform: translateY(-3px);
-    box-shadow: 0 10px 20px var(--accent-glow);
-}
-
-.sr-option-btn img {
-    width: 60px;
-    height: 60px;
-    object-fit: cover;
-    border-radius: 8px;
-    flex-shrink: 0;
-}
