@@ -130,6 +130,12 @@ function finalizeGameStart() {
         guestSyncRetryInterval = null;
     }
 
+    // CrazyGames: The match has officially started
+    if (window.CrazyGames && window.CrazyGames.SDK) {
+        window.CrazyGames.SDK.game.gameplayStart();
+        window.CrazyGames.SDK.game.hideInviteButton();
+    }
+
     document.getElementById('loading-screen').style.display = 'none';
     document.getElementById('app').style.display = 'block';
 

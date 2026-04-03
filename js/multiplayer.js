@@ -332,6 +332,12 @@ function registerMultiplayerEvents() {
         hasReceivedStartDuel = false;
         closeModals();
 
+        // CrazyGames: Hide invite button when game starts & trigger gameplayStart
+        if (window.CrazyGames && window.CrazyGames.SDK) {
+            window.CrazyGames.SDK.game.hideInviteButton();
+            window.CrazyGames.SDK.game.gameplayStart();
+        }
+
         currentVariant = data.variant;
         gameState.phase = data.phase;
         if (data.limit) draftLimit = data.limit;
@@ -580,6 +586,10 @@ function registerMultiplayerEvents() {
 // ─── ROOM STATE RESET ────────────────────────────────────────────────────────
 
 function resetLocalRoomState() {
+    // CrazyGames: Hide invite button if we leave the lobby
+    if (window.CrazyGames && window.CrazyGames.SDK) {
+        window.CrazyGames.SDK.game.hideInviteButton();
+    }
     setLobbyLoading(false);
     phaseTransitionLock = false;
     hasReceivedStartDuel = false;
@@ -673,6 +683,12 @@ function renderLobby(roomId, players) {
             statusEl.style.color = 'var(--accent)';
         }
     }
+
+    // CRAZYGAMES: Show the manual Invite Link button ONLY for the host
+    const inviteBtn = document.getElementById('cg-invite-btn');
+    if (inviteBtn) {
+        inviteBtn.style.display = amILeader ? 'inline-block' : 'none';
+    }
 }
 
 // ─── LOBBY BUTTON HANDLERS ───────────────────────────────────────────────────
@@ -715,6 +731,11 @@ document.getElementById('create-room-btn').onclick = () => {
 
         registerMultiplayerEvents();
         renderLobby(roomId, myRoomData.players);
+
+        // CrazyGames: Show invite button with the room parameter
+        if (window.CrazyGames && window.CrazyGames.SDK) {
+            window.CrazyGames.SDK.game.showInviteButton({ roomId: roomId });
+        }
     });
 };
 
@@ -734,14 +755,20 @@ document.getElementById('join-room-btn').onclick = () => {
         myIdentity = 'p2';
         registerMultiplayerEvents();
         setupConnection(conn);
+
+        // CrazyGames: Show invite button for the guest too
+        if (window.CrazyGames && window.CrazyGames.SDK) {
+            window.CrazyGames.SDK.game.showInviteButton({ roomId: room });
+        }
     });
 };
 
-// ─── START-GAME-REQUEST OVERRIDE ───
-// We need to override the logic that usually hits the server.
 socket.on('start-game-request-internal', (data) => {
     if (!amILeader) return;
-    myRoomData.players.forEach(p => { p.ready = false; p.draftList = []; });
+    myRoomData.players.forEach(p => {
+        p.ready = false;
+        p.draftList = new Array();
+    });
     socket.emit('init-online-game', {
         variant: data.variant,
         phase: data.phase,
@@ -749,3 +776,80 @@ socket.on('start-game-request-internal', (data) => {
         categoryText: data.categoryText
     });
 });
+
+// --- CRAZYGAMES SDK INITIALIZATION & INVITE HANDLING ---
+window.addEventListener('load', async () => {
+    if (window.CrazyGames && window.CrazyGames.SDK) {
+        const sdk = window.CrazyGames.SDK;
+
+        try {
+            // 1. MUST INIT FIRST
+            await sdk.init();
+            console.log("CrazyGames SDK Initialized");
+
+            // 2. NOW you can call game methods
+            sdk.game.loadingStart();
+
+            // 3. Handle Username
+            try {
+                const user = await sdk.user.getUser();
+                if (user && user.username) {
+                    const nameInput = document.getElementById('player-name-input');
+                    if (nameInput) nameInput.value = user.username.toUpperCase();
+                }
+            } catch (e) {
+                console.log("CrazyGames: User not logged in.");
+            }
+
+            // 4. Manual Invite Button logic
+            const cgInviteBtn = document.getElementById('cg-invite-btn');
+            if (cgInviteBtn) {
+                cgInviteBtn.onclick = async () => {
+                    if (myRoomData && myRoomData.roomId) {
+                        const link = await sdk.game.inviteLink({ roomId: myRoomData.roomId });
+                        navigator.clipboard.writeText(link).catch(() => { });
+                        if (typeof showModal === 'function') {
+                            showModal("INVITE LINK", "Link copied to clipboard!\n\n" + link);
+                        }
+                    }
+                };
+            }
+
+            // 5. Check for startup invites
+            const params = sdk.game.inviteParams;
+            if (params && params.roomId) {
+                joinFromInvite(params.roomId);
+            }
+
+            // 6. Listener for mid-game invites
+            sdk.game.addJoinRoomListener((p) => {
+                if (p && p.roomId) {
+                    joinFromInvite(p.roomId);
+                }
+            });
+
+            // 7. Tell SDK menu is ready
+            sdk.game.loadingStop();
+
+        } catch (error) {
+            console.error("CrazyGames SDK Failed to load:", error);
+        }
+    }
+});
+
+function joinFromInvite(roomId) {
+    const nameInput = document.getElementById('player-name-input');
+    const joinInput = document.getElementById('join-room-input');
+    const joinBtn = document.getElementById('join-room-btn');
+
+    if (roomId && joinBtn) {
+        if (!nameInput.value) {
+            nameInput.value = "PLAYER_" + Math.floor(Math.random() * 9999);
+        }
+        joinInput.value = roomId;
+        const lobbyModal = document.getElementById('modal-online-rooms');
+        if (lobbyModal) lobbyModal.style.display = 'flex';
+        joinBtn.click();
+        if (typeof closeModals === 'function') closeModals();
+    }
+}

@@ -374,6 +374,11 @@ function showModal(title, message) {
 
     if (window.SFX) SFX.popup();
 
+    // CRAZYGAMES: Trigger Happytime for victories!
+    if (["VICTORY", "GAME OVER"].includes(title)) {
+        if (window.CrazyGames && window.CrazyGames.SDK) window.CrazyGames.SDK.game.happytime();
+    }
+
     document.getElementById('modal-title').innerText = title;
     document.getElementById('modal-message').innerText = message;
     modal.style.display = 'flex';
@@ -401,6 +406,12 @@ function showModal(title, message) {
 
 
 function resetGameToMenu() {
+    // CrazyGames: We are back in the menu, stop tracking gameplay
+    if (window.CrazyGames && window.CrazyGames.SDK) {
+        window.CrazyGames.SDK.game.gameplayStop();
+        window.CrazyGames.SDK.game.hideInviteButton();
+    }
+
     // Reset all game-start guards (games.js + multiplayer.js variables)
     if (typeof gameHasStarted !== 'undefined') gameHasStarted = false;
     if (typeof phaseTransitionLock !== 'undefined') phaseTransitionLock = false;
@@ -1391,6 +1402,7 @@ function checkBRFinished() {
     const p2Done = brState.p2Ranking.every(slot => slot !== null);
 
     if (p1Done && p2Done) {
+        if (window.CrazyGames && window.CrazyGames.SDK) window.CrazyGames.SDK.game.happytime();
         document.getElementById('br-current-status').innerText = "RANKING COMPLETE!";
         document.getElementById('br-active-reveal').innerHTML = '<h2 style="color:var(--neon-p1); font-family:var(--font-head); font-size: 32px; text-align:center; margin-top: 50px; text-shadow: 0 0 15px var(--neon-p1);">ALL DONE!</h2><button class="glow-btn pink" onclick="resetGameToMenu()" style="margin-top:20px;">BACK TO MENU</button>';
     }
@@ -1693,6 +1705,7 @@ function checkKCUFinished() {
 }
 
 function showKCUSummary() {
+    if (window.CrazyGames && window.CrazyGames.SDK) window.CrazyGames.SDK.game.happytime();
     document.getElementById('kcu-title').innerText = "THE VERDICTS ARE IN";
     document.getElementById('kcu-subtitle').innerText = "";
     document.getElementById('kcu-confirm-btn').style.display = 'none';
@@ -1907,6 +1920,7 @@ function handleOUPDecisionSync(data) {
 }
 
 function showOUPSummary() {
+    if (window.CrazyGames && window.CrazyGames.SDK) window.CrazyGames.SDK.game.happytime();
     const titleEl = document.getElementById('oup-title');
     const subtEl = document.getElementById('oup-subtitle');
     titleEl.innerText = "FINAL RATINGS";
@@ -2327,6 +2341,7 @@ function applyPPStampStyle(stamp, decision) {
 }
 
 function showPPSummary() {
+    if (window.CrazyGames && window.CrazyGames.SDK) window.CrazyGames.SDK.game.happytime();
     const titleEl = document.getElementById("pp-title");
     const subtEl = document.getElementById("pp-subtitle");
     titleEl.innerText = "MARKET WRAP-UP";
