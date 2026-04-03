@@ -131,9 +131,9 @@ function finalizeGameStart() {
     }
 
     // CrazyGames: The match has officially started
-    if (window.CrazyGames && window.CrazyGames.SDK) {
-        window.CrazyGames.SDK.game.gameplayStart();
-        window.CrazyGames.SDK.game.hideInviteButton();
+    if (cgSDK) {
+        cgSDK.game.gameplayStart();
+        cgSDK.game.hideInviteButton();
     }
 
     document.getElementById('loading-screen').style.display = 'none';

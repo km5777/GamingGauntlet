@@ -134,40 +134,53 @@ function connectMultiplayer() {
  */
 function initPeer(id, callback) {
     if (peer) {
-        if (callback) callback();
-        return;
+        if (id && peer.id !== id) {
+            // Need a specific ID but peer has a different one, destroy it
+            peer.destroy();
+            peer = null;
+        } else if (!peer.destroyed && peer.id) {
+            // Peer is already ready, use it immediately
+            if (callback) callback(peer.id);
+            return;
+        } else {
+            // Peer is stuck or connecting, wipe it to prevent deadlocks
+            peer.destroy();
+            peer = null;
+        }
     }
 
-    peer = new Peer(id, {
-        debug: 1 // Only log errors
-    });
+    if (!peer) {
+        peer = new Peer(id, {
+            debug: 1 // Only log errors
+        });
 
-    peer.on('open', (myId) => {
-        console.log('[PeerJS] My peer ID is: ' + myId);
-        if (callback) callback(myId);
-    });
+        peer.on('open', (myId) => {
+            console.log('[PeerJS] My peer ID is: ' + myId);
+            if (callback) callback(myId);
+        });
 
-    peer.on('error', (err) => {
-        console.error('[PeerJS] Error:', err);
-        if (typeof setLobbyLoading === 'function') setLobbyLoading(false);
-        if (err.type === 'unavailable-id') {
-            showModal('ERROR', 'That room key is already in use. Try again.');
-        } else if (err.type === 'peer-unavailable') {
-            showModal('ERROR', 'Room not found. Check the key.');
-        } else {
-            showModal('PEER ERROR', err.type);
-        }
-        resetLocalRoomState();
-    });
+        peer.on('error', (err) => {
+            console.error('[PeerJS] Error:', err);
+            if (typeof setLobbyLoading === 'function') setLobbyLoading(false);
+            if (err.type === 'unavailable-id') {
+                showModal('ERROR', 'That room key is already in use. Try again.');
+            } else if (err.type === 'peer-unavailable') {
+                showModal('ERROR', 'Room not found. Check the key.');
+            } else {
+                showModal('PEER ERROR', err.type);
+            }
+            resetLocalRoomState();
+        });
 
-    // --- HOST ONLY: Incoming connections ---
-    peer.on('connection', (conn) => {
-        if (currentConn) {
-            conn.close(); // Only 2 players allowed
-            return;
-        }
-        setupConnection(conn);
-    });
+        // --- HOST ONLY: Incoming connections ---
+        peer.on('connection', (conn) => {
+            if (currentConn) {
+                conn.close(); // Only 2 players allowed
+                return;
+            }
+            setupConnection(conn);
+        });
+    }
 }
 
 function setupConnection(conn) {
@@ -333,9 +346,9 @@ function registerMultiplayerEvents() {
         closeModals();
 
         // CrazyGames: Hide invite button when game starts & trigger gameplayStart
-        if (window.CrazyGames && window.CrazyGames.SDK) {
-            window.CrazyGames.SDK.game.hideInviteButton();
-            window.CrazyGames.SDK.game.gameplayStart();
+        if (cgSDK) {
+            cgSDK.game.hideInviteButton();
+            cgSDK.game.gameplayStart();
         }
 
         currentVariant = data.variant;
@@ -587,8 +600,8 @@ function registerMultiplayerEvents() {
 
 function resetLocalRoomState() {
     // CrazyGames: Hide invite button if we leave the lobby
-    if (window.CrazyGames && window.CrazyGames.SDK) {
-        window.CrazyGames.SDK.game.hideInviteButton();
+    if (cgSDK) {
+        cgSDK.game.hideInviteButton();
     }
     setLobbyLoading(false);
     phaseTransitionLock = false;
@@ -687,7 +700,7 @@ function renderLobby(roomId, players) {
     // CRAZYGAMES: Show the manual Invite Link button ONLY for the host
     const inviteBtn = document.getElementById('cg-invite-btn');
     if (inviteBtn) {
-        inviteBtn.style.display = amILeader ? 'inline-block' : 'none';
+        inviteBtn.style.display = (amILeader && cgSDK) ? 'inline-block' : 'none';
     }
 }
 
@@ -733,8 +746,8 @@ document.getElementById('create-room-btn').onclick = () => {
         renderLobby(roomId, myRoomData.players);
 
         // CrazyGames: Show invite button with the room parameter
-        if (window.CrazyGames && window.CrazyGames.SDK) {
-            window.CrazyGames.SDK.game.showInviteButton({ roomId: roomId });
+        if (cgSDK) {
+            cgSDK.game.showInviteButton({ roomId: roomId });
         }
     });
 };
@@ -757,8 +770,8 @@ document.getElementById('join-room-btn').onclick = () => {
         setupConnection(conn);
 
         // CrazyGames: Show invite button for the guest too
-        if (window.CrazyGames && window.CrazyGames.SDK) {
-            window.CrazyGames.SDK.game.showInviteButton({ roomId: room });
+        if (cgSDK) {
+            cgSDK.game.showInviteButton({ roomId: room });
         }
     });
 };
@@ -778,35 +791,35 @@ socket.on('start-game-request-internal', (data) => {
 });
 
 // --- CRAZYGAMES SDK INITIALIZATION & INVITE HANDLING ---
+let cgSDK = null; // This will only stay filled if we are on CrazyGames
+
 window.addEventListener('load', async () => {
     if (window.CrazyGames && window.CrazyGames.SDK) {
-        const sdk = window.CrazyGames.SDK;
-
         try {
-            // 1. MUST INIT FIRST
+            const sdk = window.CrazyGames.SDK;
             await sdk.init();
-            console.log("CrazyGames SDK Initialized");
 
-            // 2. NOW you can call game methods
-            sdk.game.loadingStart();
+            // If we reach here without an error, we are on CrazyGames!
+            cgSDK = sdk;
+            console.log("CrazyGames SDK Active");
 
-            // 3. Handle Username
+            cgSDK.game.loadingStart();
+
+            // Auto-fill Username
             try {
-                const user = await sdk.user.getUser();
+                const user = await cgSDK.user.getUser();
                 if (user && user.username) {
                     const nameInput = document.getElementById('player-name-input');
                     if (nameInput) nameInput.value = user.username.toUpperCase();
                 }
-            } catch (e) {
-                console.log("CrazyGames: User not logged in.");
-            }
+            } catch (e) { }
 
-            // 4. Manual Invite Button logic
+            // Manual Invite Button
             const cgInviteBtn = document.getElementById('cg-invite-btn');
             if (cgInviteBtn) {
                 cgInviteBtn.onclick = async () => {
                     if (myRoomData && myRoomData.roomId) {
-                        const link = await sdk.game.inviteLink({ roomId: myRoomData.roomId });
+                        const link = await cgSDK.game.inviteLink({ roomId: myRoomData.roomId });
                         navigator.clipboard.writeText(link).catch(() => { });
                         if (typeof showModal === 'function') {
                             showModal("INVITE LINK", "Link copied to clipboard!\n\n" + link);
@@ -815,24 +828,22 @@ window.addEventListener('load', async () => {
                 };
             }
 
-            // 5. Check for startup invites
-            const params = sdk.game.inviteParams;
-            if (params && params.roomId) {
-                joinFromInvite(params.roomId);
+            // Startup Invites
+            if (cgSDK.game.inviteParams && cgSDK.game.inviteParams.roomId) {
+                joinFromInvite(cgSDK.game.inviteParams.roomId);
             }
 
-            // 6. Listener for mid-game invites
-            sdk.game.addJoinRoomListener((p) => {
-                if (p && p.roomId) {
-                    joinFromInvite(p.roomId);
-                }
+            // Mid-game Invites
+            cgSDK.game.addJoinRoomListener((p) => {
+                if (p && p.roomId) joinFromInvite(p.roomId);
             });
 
-            // 7. Tell SDK menu is ready
-            sdk.game.loadingStop();
+            cgSDK.game.loadingStop();
 
         } catch (error) {
-            console.error("CrazyGames SDK Failed to load:", error);
+            // This triggers on itch.io - we just ignore the SDK and play normally
+            console.log("Platform: Standard Web (CrazyGames SDK Disabled)");
+            cgSDK = null;
         }
     }
 });
