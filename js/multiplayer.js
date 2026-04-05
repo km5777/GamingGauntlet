@@ -728,6 +728,11 @@ document.getElementById('create-room-btn').onclick = () => {
     const name = document.getElementById('player-name-input').value.trim();
     if (!name) return showModal('ERROR', 'Enter a name first!');
 
+    // <-- ADDED: Filter name check
+    if (typeof containsProfanity === 'function' && containsProfanity(name)) {
+        return showModal('ERROR', 'Inappropriate name detected! Please choose another.');
+    }
+
     setLobbyLoading(true);
     const roomId = Math.random().toString(36).substring(2, 7).toUpperCase();
     const peerId = 'GG-' + roomId;
@@ -756,6 +761,11 @@ document.getElementById('join-room-btn').onclick = () => {
     const name = document.getElementById('player-name-input').value.trim();
     const room = document.getElementById('join-room-input').value.trim().toUpperCase();
     if (!name || !room) return showModal('ERROR', 'Name and Room Key required!');
+
+    // <-- ADDED: Filter name check
+    if (typeof containsProfanity === 'function' && containsProfanity(name)) {
+        return showModal('ERROR', 'Inappropriate name detected! Please choose another.');
+    }
 
     setLobbyLoading(true);
     myRoomData.playerName = name;
@@ -809,8 +819,15 @@ window.addEventListener('load', async () => {
             try {
                 const user = await cgSDK.user.getUser();
                 if (user && user.username) {
+                    let safeName = user.username.toUpperCase();
+
+                    // If SDK pulls a bad username, generate a random one instead
+                    if (typeof containsProfanity === 'function' && containsProfanity(safeName)) {
+                        safeName = "PLAYER_" + Math.floor(Math.random() * 9999);
+                    }
+
                     const nameInput = document.getElementById('player-name-input');
-                    if (nameInput) nameInput.value = user.username.toUpperCase();
+                    if (nameInput) nameInput.value = safeName;
                 }
             } catch (e) { }
 
@@ -828,9 +845,29 @@ window.addEventListener('load', async () => {
                 };
             }
 
-            // Startup Invites
+            // Startup Invites & Instant Multiplayer Routing
             if (cgSDK.game.inviteParams && cgSDK.game.inviteParams.roomId) {
                 joinFromInvite(cgSDK.game.inviteParams.roomId);
+            }
+            else if (cgSDK.game.isInstantMultiplayer) {
+                // <-- THE NEW FIX: The player clicked "Play with Friends" on the CG portal.
+                console.log("Instant Multiplayer Triggered - Auto-hosting lobby");
+
+                const nameInput = document.getElementById('player-name-input');
+                let currentName = nameInput.value.trim();
+
+                // Ensure they have a safe name before we auto-create
+                if (!currentName || (typeof containsProfanity === 'function' && containsProfanity(currentName))) {
+                    nameInput.value = "PLAYER_" + Math.floor(Math.random() * 9999);
+                }
+
+                // Show the multiplayer modal
+                const lobbyModal = document.getElementById('modal-online-rooms');
+                if (lobbyModal) lobbyModal.style.display = 'flex';
+
+                // Automatically click the "Create Room" button to drop them into a joinable state
+                const createBtn = document.getElementById('create-room-btn');
+                if (createBtn) createBtn.click();
             }
 
             // Mid-game Invites
@@ -854,9 +891,13 @@ function joinFromInvite(roomId) {
     const joinBtn = document.getElementById('join-room-btn');
 
     if (roomId && joinBtn) {
-        if (!nameInput.value) {
+        let currentName = nameInput.value.trim();
+
+        // <-- ADDED: Check against empty strings OR profanity
+        if (!currentName || (typeof containsProfanity === 'function' && containsProfanity(currentName))) {
             nameInput.value = "PLAYER_" + Math.floor(Math.random() * 9999);
         }
+
         joinInput.value = roomId;
         const lobbyModal = document.getElementById('modal-online-rooms');
         if (lobbyModal) lobbyModal.style.display = 'flex';
@@ -864,3 +905,4 @@ function joinFromInvite(roomId) {
         if (typeof closeModals === 'function') closeModals();
     }
 }
+

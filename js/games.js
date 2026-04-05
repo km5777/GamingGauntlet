@@ -1,21 +1,101 @@
+// --- NSFW & PROFANITY FILTERS ---
+const PROFANITY_LIST = [
+    "fuck", "shit", "bitch", "cunt", "dick", "pussy", "asshole", "faggot", "fag", "dyke", "cock",
+    "nigger", "nigga", "slut", "whore", "porn", "hentai", "sex", "rape", "incest", "pedophile",
+    "cum", "blowjob", "tits", "boobs", "vagina", "penis", "masturbate", "adult", "pussy"
+];
+
+const EXPLICIT_SUBSTRINGS = ["hentai", "porn", "nsfw", "rule34", "r34", "nude", "nudity", "erotic"];
+
+const NSFW_TAGS = [
+    "nsfw", "hentai", "porn", "nudity", "sexual content", "erotic", "adult", "18+", "nsfw-content", "sexual"
+];
+
+function containsProfanity(text) {
+    if (!text) return false;
+
+    // 1. Convert to lowercase and handle basic leetspeak tricks
+    let normalized = text.toLowerCase()
+        .replace(/0/g, 'o')
+        .replace(/1/g, 'i')
+        .replace(/!/g, 'i')
+        .replace(/3/g, 'e')
+        .replace(/4/g, 'a')
+        .replace(/@/g, 'a')
+        .replace(/5/g, 's')
+        .replace(/\$/g, 's');
+
+    // 2. Strip all punctuation but KEEP spaces for word boundaries 
+    let noPunctuation = normalized.replace(/[^\w\s]/g, '');
+
+    // 3. SEVERE WORDS: Substring match (No boundaries).
+    // If this sequence of letters appears ANYWHERE inside the string, it is blocked.
+    // Moved slurs and undeniable profanity here so they can't be hidden inside other text.
+    const SEVERE_WORDS = [
+        "fuck", "bitch", "faggot", "porn", "hentai", "pedophile", "rule34", "r34",
+        "masturbate", "blowjob", "incest", "vagina", "slut", "whore",
+        "nigger", "nigga", "cunt", "asshole" // <-- Moved these from Boundary to Severe
+    ];
+
+    // 4. BOUNDARY WORDS: Must be distinct words.
+    // We keep short words here to prevent the "Scunthorpe Problem" 
+    // (e.g., blocking "class" because it has "ass", or "document" because it has "cum").
+    const BOUNDARY_WORDS = [
+        "shit", "shits", "shitty", "bullshit",
+        "dick", "dicks", "dickhead",
+        "pussy", "pussies",
+        "rape", "raped", "rapist", "nude", "nudes", "nudity",
+        "cum", "cums", "cumming",
+        "penis", "penises",
+        "ass", "asses",
+        "tits", "titties", "boobs", "adult",
+        "fag", "fags", "dyke", "dykes",
+        "cock", "cocks", "sex", "sexy", "sexual"
+    ];
+
+    // HELPER: Generates a regex that catches repeated letters AND internal spaces.
+    function buildRegex(word, requireBoundary) {
+        const pattern = word.split('').map(char => char + '+').join('\\s*');
+        return requireBoundary ? new RegExp(`\\b${pattern}\\b`, 'i') : new RegExp(pattern, 'i');
+    }
+
+    // Evaluate Severe Words (Boundary independent - catches "NIGGERGERERER")
+    if (SEVERE_WORDS.some(word => buildRegex(word, false).test(noPunctuation))) return true;
+
+    // Evaluate Contextual Words (Must be standalone words)
+    if (BOUNDARY_WORDS.some(word => buildRegex(word, true).test(noPunctuation))) return true;
+
+    return false;
+}
+
+function isGameNSFW(game) {
+    if (!game) return false;
+    if (containsProfanity(game.name)) return true;
+    if (game.slug && containsProfanity(game.slug)) return true;
+
+    const NSFW_TAGS = ["nsfw", "hentai", "porn", "nudity", "sexual", "erotic", "adult", "18+"];
+
+    if (game.tags) {
+        for (let tag of game.tags) {
+            if (NSFW_TAGS.some(nsfw => tag.name.toLowerCase().includes(nsfw))) return true;
+        }
+    }
+    if (game.genres) {
+        for (let genre of game.genres) {
+            if (NSFW_TAGS.some(nsfw => genre.name.toLowerCase().includes(nsfw))) return true;
+        }
+    }
+    return false;
+}
+
+// --- ORIGINAL GAMES LOGIC ---
 const API_KEY = "62593b97a74e46aca2f4820ee2548f86";
 let masterGameLibrary = [];
 let currentVariant = 'random';
 let draftingPool = [];
 let isGuestWaiting = false;
 
-/**
- * gameHasStarted — one-shot guard for finalizeGameStart().
- * Prevents double-init if both the 'always broadcast' and 'on-demand'
- * library sync paths deliver init-library to the same player.
- * Reset in resetGameToMenu() via the gameLogic or directly here.
- */
 let gameHasStarted = false;
-
-/**
- * guestSyncRetryInterval — repeating timer on the guest side.
- * Re-sends request-library-sync every 3 seconds until the library arrives.
- */
 let guestSyncRetryInterval = null;
 
 function shuffleArray(array) {
@@ -33,13 +113,7 @@ async function loadGames() {
 
     if (myRoomData.isOnline && !amILeader) {
         document.querySelector('.loading-text').innerText = 'WAITING FOR LEADER TO SYNC...';
-
-        // Send the initial request
         socket.emit('request-library-sync', { roomId: myRoomData.roomId });
-
-        // Retry every 3 seconds in case the first request was dropped
-        // (Render.com free tier can drop socket events during wake-up).
-        // The interval is cancelled inside the init-library handler.
         if (guestSyncRetryInterval) clearInterval(guestSyncRetryInterval);
         guestSyncRetryInterval = setInterval(() => {
             if (!myRoomData.isOnline || gameHasStarted) {
@@ -59,7 +133,7 @@ async function loadGames() {
                     if (!res.ok) return { results: [] };
                     return res.json().catch(() => ({ results: [] }));
                 })
-                .catch(err => ({ results: [] })) // Prevent fetch network errors from crashing Promises
+                .catch(err => ({ results: [] }))
         );
 
         const allResults = await Promise.all(requests);
@@ -68,22 +142,15 @@ async function loadGames() {
         if (bigList.length === 0) {
             bigList = [
                 { id: 1, name: "RAWG Error: Fallback 1", background_image: "", added: 3000, released: "2024-01-01" },
-                { id: 2, name: "RAWG Error: Fallback 2", background_image: "", added: 3000, released: "2024-01-01" },
-                { id: 3, name: "RAWG Error: Fallback 3", background_image: "", added: 3000, released: "2024-01-01" },
-                { id: 4, name: "RAWG Error: Fallback 4", background_image: "", added: 3000, released: "2024-01-01" },
-                { id: 5, name: "RAWG Error: Fallback 5", background_image: "", added: 3000, released: "2024-01-01" },
-                { id: 6, name: "RAWG Error: Fallback 6", background_image: "", added: 3000, released: "2024-01-01" },
-                { id: 7, name: "RAWG Error: Fallback 7", background_image: "", added: 3000, released: "2024-01-01" },
-                { id: 8, name: "RAWG Error: Fallback 8", background_image: "", added: 3000, released: "2024-01-01" },
-                { id: 9, name: "RAWG Error: Fallback 9", background_image: "", added: 3000, released: "2024-01-01" },
-                { id: 10, name: "RAWG Error: Fallback 10", background_image: "", added: 3000, released: "2024-01-01" }
+                { id: 2, name: "RAWG Error: Fallback 2", background_image: "", added: 3000, released: "2024-01-01" }
             ];
         }
 
         masterGameLibrary = bigList.filter((game, index, self) =>
             game.background_image &&
-            game.released && // FIX: Strictly reject games without release dates
+            game.released &&
             game.added > 2500 &&
+            !isGameNSFW(game) && // <-- ADDED: Filter out inappropriate games
             index === self.findIndex((g) => g.id === game.id)
         ).map(game => ({
             id: game.id,
@@ -95,9 +162,6 @@ async function loadGames() {
         shuffleArray(masterGameLibrary);
         draftingPool = [...masterGameLibrary];
 
-        // ── Online leader: always broadcast library the moment it's ready ──
-        // Removed the `isGuestWaiting` gate — leader now proactively sends
-        // so the guest doesn't have to perfectly time its request-library-sync.
         if (!myRoomData.isOnline) {
             finalizeGameStart();
         } else if (amILeader) {
@@ -119,19 +183,15 @@ async function loadGames() {
 }
 
 function finalizeGameStart() {
-    // Guard: prevent double-init if both the proactive broadcast and the
-    // on-demand sync-library both deliver init-library to the same player.
     if (gameHasStarted) return;
     gameHasStarted = true;
 
-    // Cancel guest retry loop if still running
     if (guestSyncRetryInterval) {
         clearInterval(guestSyncRetryInterval);
         guestSyncRetryInterval = null;
     }
 
-    // CrazyGames: The match has officially started
-    if (cgSDK) {
+    if (typeof cgSDK !== 'undefined' && cgSDK) {
         cgSDK.game.gameplayStart();
         cgSDK.game.hideInviteButton();
     }
@@ -150,13 +210,12 @@ function finalizeGameStart() {
         document.getElementById('hl-phase').style.display = 'flex';
 
         if (!myRoomData.isOnline || amILeader) {
-            // Leader generates the first round
             hlState.currentStandardGame = masterGameLibrary.pop();
             hlState.nextGame = masterGameLibrary.pop();
             gameState.turn = 'p1';
 
             if (myRoomData.isOnline) {
-                socket.emit('hl-init-games', { // FIX: Changed from hl-start-game
+                socket.emit('hl-init-games', {
                     roomId: myRoomData.roomId,
                     std: hlState.currentStandardGame,
                     next: hlState.nextGame,
@@ -170,7 +229,6 @@ function finalizeGameStart() {
         startPPRandomPhase();
         return;
     } else {
-        // Drafting Mode (Keep/Kill)
         document.getElementById('draft-phase').style.display = 'block';
         document.getElementById('hl-phase').style.display = 'none';
         if (currentVariant === 'search') {
@@ -191,26 +249,28 @@ function finalizeGameStart() {
 
 async function searchRAWG(query) {
     if (query.length < 3) return [];
+    if (typeof containsProfanity === 'function' && containsProfanity(query)) return []; // <-- ADDED: Reject bad searches
+
     try {
         const url = `https://api.rawg.io/api/games?key=${API_KEY}&search=${query}&page_size=10`;
         const resp = await fetch(url);
         if (!resp.ok) return [];
         const data = await resp.json();
-        return data.results || [];
+        const results = data.results || [];
+
+        // <-- ADDED: Filter out NSFW results dynamically on search
+        return results.filter(game => !isGameNSFW(game));
     } catch (e) {
         return [];
     }
 }
 
 function refreshLibraryUI() {
-    // THE FIX: If the pool gets low, refill it from the master library
     if (draftingPool.length < 40) {
         console.log("Refilling drafting pool from master library...");
         draftingPool = [...masterGameLibrary];
         shuffleArray(draftingPool);
     }
-
-    // Grab 40 from the drafting pool
     const displayBatch = draftingPool.splice(0, 40);
     renderGameLibrary(displayBatch);
 }
@@ -219,8 +279,6 @@ const startBtn = document.getElementById('start-game-btn');
 if (startBtn) {
     startBtn.onclick = () => {
         if (typeof startMusic === "function") startMusic();
-
-        // ONLY change text if we are NOT in the online lobby
         if (!myRoomData.isOnline) {
             startBtn.innerText = "INITIALIZING ARENA...";
             setTimeout(() => {

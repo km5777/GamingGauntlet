@@ -701,6 +701,11 @@ document.getElementById('cc-confirm-setup-btn').onclick = () => {
     const topic = document.getElementById('cc-category-input').value.trim();
     if (!topic || topic.length < 2) return showModal("ERROR", "Please enter a valid category.");
 
+    // <-- ADDED: Filter custom categories
+    if (typeof containsProfanity === 'function' && containsProfanity(topic)) {
+        return showModal("ERROR", "Inappropriate category name detected.");
+    }
+
     ccState.category = topic;
     closeModals();
 
@@ -929,6 +934,13 @@ if (searchInput) {
         // Clear the previous timer every time the user types
         clearTimeout(searchTimeout);
 
+        // <-- ADDED: Immediate UI block for profanity searches
+        if (typeof containsProfanity === 'function' && containsProfanity(query)) {
+            resultsBox.style.display = 'block';
+            resultsBox.innerHTML = '<div style="padding:15px; color:#ff5e62; font-size:12px; font-weight:bold; letter-spacing:1px;">BLOCKED: INAPPROPRIATE SEARCH</div>';
+            return;
+        }
+
         if (query.length < 3) {
             resultsBox.innerHTML = '';
             resultsBox.style.display = 'none';
@@ -939,11 +951,10 @@ if (searchInput) {
         resultsBox.style.display = 'block';
         resultsBox.innerHTML = '<div style="padding:15px; color:#8a8d98; font-size:12px;">SEARCHING...</div>';
 
-        // Wait 50ms after the user stops typing to call the API (ultra-fast)
+        // Wait 250ms after the user stops typing to call the API
         searchTimeout = setTimeout(async () => {
             const results = await searchRAWG(query);
 
-            // If the user cleared the input while we were waiting for API
             if (searchInput.value.length < 3) {
                 resultsBox.style.display = 'none';
                 return;

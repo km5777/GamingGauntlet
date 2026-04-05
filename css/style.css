@@ -1354,3 +1354,486 @@ input[type="text"]:focus {
     box-shadow: none !important;
     opacity: 0.8;
 }
+
+/* =============================================================
+   RESPONSIVE SCALING SYSTEM
+   Goal: identical UI proportions on any screen / orientation
+   ============================================================= */
+
+/* --- FLUID BASE SIZES (affect all screen sizes) ------------- */
+
+.logo {
+    font-size: clamp(32px, 6vmin, 72px);
+    margin-bottom: clamp(16px, 3vmin, 40px);
+}
+
+.menu-card,
+.modal-content {
+    padding: clamp(24px, 4vmin, 60px) clamp(20px, 4vmin, 60px);
+}
+
+.cyber-btn,
+.glow-btn,
+.action-btn {
+    padding: clamp(10px, 2vmin, 16px) clamp(20px, 4vmin, 48px);
+    font-size: clamp(13px, 1.8vmin, 18px);
+}
+
+.neon-text {
+    font-size: clamp(16px, 3vmin, 28px);
+}
+
+#turn-indicator {
+    font-size: clamp(16px, 3vmin, 28px);
+}
+
+/* --- PORTRAIT MOBILE (≤ 600px wide) ------------------------- */
+
+@media (max-width: 600px) {
+
+    .game-card {
+        width: clamp(130px, 40vw, 180px);
+    }
+
+    .game-card img {
+        height: clamp(110px, 22vw, 170px);
+    }
+
+    .status-grid {
+        grid-template-columns: repeat(5, 50px);
+        grid-template-rows: repeat(2, 68px);
+        gap: 8px;
+    }
+
+    .hud {
+        padding: 14px;
+        border-radius: 16px;
+    }
+
+    .choice-btn {
+        width: clamp(130px, 38vw, 200px);
+        padding: 14px;
+        font-size: 18px;
+    }
+
+    .hl-container {
+        flex-direction: column;
+        gap: 12px;
+        margin-top: 16px;
+    }
+
+    .hl-card {
+        width: clamp(220px, 70vw, 280px);
+    }
+
+    .hl-card img {
+        height: clamp(160px, 38vw, 250px);
+    }
+
+    .hl-vs-circle {
+        width: 54px;
+        height: 54px;
+        font-size: 18px;
+    }
+
+    .br-list {
+        min-width: 0;
+    }
+
+    .counter-badge {
+        padding: 8px 16px;
+        font-size: 13px;
+    }
+
+    .draft-stats {
+        gap: 10px;
+        flex-wrap: wrap;
+        justify-content: center;
+    }
+}
+
+/* --- LANDSCAPE MOBILE (height ≤ 500px) ----------------------
+   This is the main problem: phones in landscape mode.
+   Height is roughly 360-430px so everything must shrink.
+   ------------------------------------------------------------- */
+
+@media (orientation: landscape) and (max-height: 500px) {
+
+    /* BODY / SCROLL */
+    body {
+        overflow-y: auto;
+    }
+
+    /* MENU */
+    .screen-center {
+        min-height: 100dvh;
+        padding: 12px;
+    }
+
+    .logo {
+        font-size: clamp(22px, 5vh, 38px);
+        margin-bottom: 12px;
+        letter-spacing: 2px;
+    }
+
+    .menu-card {
+        padding: 20px 30px;
+        border-radius: 20px;
+    }
+
+    .menu-actions-stack {
+        gap: 10px;
+        margin-top: 14px;
+    }
+
+    .cyber-btn,
+    .glow-btn,
+    .action-btn {
+        padding: 9px 22px;
+        font-size: 12px;
+        border-radius: 40px;
+    }
+
+    /* MODALS */
+    .modal-content {
+        padding: 18px 22px;
+        border-radius: 18px;
+        max-height: 92dvh;
+        overflow-y: auto;
+    }
+
+    .modal-content .neon-text {
+        font-size: 16px;
+        margin-bottom: 12px !important;
+    }
+
+    .modes-grid {
+        gap: 8px;
+    }
+
+    .mode-card {
+        padding: 12px 8px;
+    }
+
+    .mode-card.small {
+        min-height: 90px;
+        padding: 10px 6px;
+    }
+
+    .mode-icon {
+        font-size: 22px;
+        margin-bottom: 6px;
+    }
+
+    .mode-info h3 {
+        font-size: 11px;
+    }
+
+    .mode-info p {
+        font-size: 9px;
+    }
+
+    .modal-footer {
+        margin-top: 14px !important;
+        padding-top: 14px !important;
+    }
+
+    /* AUDIO CONTROLS */
+    #audio-controls {
+        top: 8px;
+        right: 8px;
+    }
+
+    .volume-container {
+        padding: 6px 12px;
+        gap: 8px;
+        border-radius: 40px;
+    }
+
+    #volume-slider {
+        width: 60px;
+    }
+
+    /* LEAVE GAME BUTTON */
+    #leave-game-btn {
+        top: 6px;
+        left: 8px;
+        padding: 6px 12px;
+        font-size: 10px;
+        border-radius: 8px;
+    }
+
+    /* UI HEADER (draft / HL phases) */
+    .ui-header {
+        padding: 6px 0;
+    }
+
+    #turn-indicator,
+    .neon-text {
+        font-size: clamp(13px, 2.5vh, 18px);
+        margin-bottom: 4px;
+    }
+
+    .draft-stats {
+        margin-top: 4px;
+        gap: 8px;
+    }
+
+    .counter-badge {
+        padding: 5px 12px;
+        font-size: 11px;
+    }
+
+    /* DRAFT PHASE — GAME CARDS */
+    .game-card {
+        width: clamp(110px, 17vw, 155px);
+    }
+
+    .game-card img {
+        height: clamp(80px, 20vh, 130px);
+    }
+
+    .game-card h3 {
+        font-size: 11px;
+        padding: 8px 6px;
+    }
+
+    .grid-wrapper {
+        padding: 6px 0;
+    }
+
+    .centered-grid {
+        gap: 8px;
+        padding: 6px;
+    }
+
+    /* DUEL PHASE */
+    #duel-phase {
+        padding: 8px 12px;
+    }
+
+    .duel-main {
+        max-height: 42dvh;
+        gap: 10px;
+    }
+
+    .duel-top {
+        margin-top: 8px;
+    }
+
+    #timer-container {
+        width: clamp(280px, 60vw, 500px);
+        margin-top: 6px;
+    }
+
+    .reveal-image {
+        max-height: 26dvh;
+    }
+
+    .duel-title {
+        font-size: 15px;
+        margin: 8px 0;
+    }
+
+    .reveal-choice-card {
+        width: clamp(100px, 16vw, 140px);
+    }
+
+    .reveal-choice-card img {
+        height: clamp(68px, 14vh, 100px);
+    }
+
+    .reveal-card-label {
+        font-size: 10px;
+        padding: 6px;
+        min-height: 28px;
+    }
+
+    .choice-btn {
+        width: clamp(110px, 22vw, 160px);
+        padding: 10px;
+        font-size: 15px;
+        border-radius: 14px;
+    }
+
+    /* PLAYER HUDS */
+    #player-huds {
+        margin-bottom: 4px;
+    }
+
+    .hud {
+        padding: 10px 12px;
+        border-radius: 14px;
+    }
+
+    .hud h3 {
+        font-size: 10px;
+        margin-bottom: 8px;
+    }
+
+    .status-grid {
+        grid-template-columns: repeat(5, clamp(38px, 6vw, 52px));
+        grid-template-rows: repeat(2, clamp(52px, 8vh, 72px));
+        gap: 6px;
+    }
+
+    /* HIGHER / LOWER PHASE */
+    #hl-phase {
+        overflow-y: auto;
+    }
+
+    .hl-stats-row {
+        margin-top: 4px;
+        gap: 12px;
+    }
+
+    .hl-score-box {
+        padding: 4px 12px;
+        font-size: 11px;
+    }
+
+    .hl-round-badge {
+        padding: 4px 12px;
+        font-size: 10px;
+    }
+
+    .hl-container {
+        flex-direction: row;
+        /* Stay side-by-side but smaller */
+        gap: 16px;
+        margin-top: 8px;
+        align-items: flex-start;
+    }
+
+    .hl-card {
+        width: clamp(140px, 26vw, 220px);
+    }
+
+    .hl-card img {
+        height: clamp(120px, 32vh, 200px);
+    }
+
+    .hl-card h3 {
+        font-size: 12px;
+        margin: 8px 0 0 0;
+    }
+
+    .hl-year-badge {
+        font-size: 15px;
+        padding: 4px 14px;
+        top: -13px;
+    }
+
+    .hl-vs-circle {
+        width: 48px;
+        height: 48px;
+        font-size: 15px;
+        flex-shrink: 0;
+        align-self: center;
+    }
+
+    .hl-btn-stack {
+        margin-top: 10px;
+        gap: 6px;
+    }
+
+    .hl-btn {
+        padding: 8px;
+        font-size: 12px;
+        border-radius: 8px;
+    }
+
+    /* BLIND RANKING */
+    .br-list {
+        min-width: 0;
+        padding: 12px;
+    }
+
+    .br-slot {
+        height: 46px;
+    }
+
+    .br-slot-num {
+        width: 32px;
+        font-size: 15px;
+    }
+
+    /* CC / KCU / OUP / PP active cards */
+    #oup-active-card,
+    #pp-active-card {
+        width: clamp(160px, 30vw, 240px) !important;
+        height: auto !important;
+    }
+
+    #oup-active-img,
+    #pp-active-img {
+        height: clamp(120px, 28vh, 180px) !important;
+    }
+
+    #oup-active-name,
+    #pp-active-name {
+        font-size: 14px !important;
+        padding: 10px !important;
+    }
+
+    #oup-controls,
+    #pp-controls {
+        gap: 8px;
+        margin-top: 14px !important;
+        flex-wrap: wrap;
+        justify-content: center;
+    }
+
+    #oup-controls .glow-btn,
+    #pp-controls .glow-btn {
+        padding: 8px 14px;
+        font-size: 11px;
+    }
+
+    /* KCU phase */
+    #kcu-cards-container {
+        gap: 16px !important;
+        padding: 12px !important;
+        align-items: center !important;
+    }
+
+    /* CC board — stack columns vertically on landscape small screens
+       if too cramped; or let it scroll horizontally */
+    .cc-board {
+        gap: 16px !important;
+        padding: 10px !important;
+        overflow-x: auto;
+    }
+
+    /* Spinner / loading */
+    .spinner {
+        width: 36px;
+        height: 36px;
+        border-width: 3px;
+    }
+}
+
+/* --- VERY WIDE LANDSCAPE (tablets in landscape, ≥ 600px height) */
+@media (orientation: landscape) and (min-height: 501px) and (max-height: 768px) {
+
+    .logo {
+        font-size: clamp(36px, 5vmin, 60px);
+    }
+
+    .hl-card img {
+        height: clamp(200px, 30vh, 320px);
+    }
+
+    .game-card {
+        width: clamp(150px, 14vw, 185px);
+    }
+
+    .game-card img {
+        height: clamp(140px, 20vh, 200px);
+    }
+
+    .status-grid {
+        grid-template-columns: repeat(5, 56px);
+        grid-template-rows: repeat(2, 76px);
+    }
+}
